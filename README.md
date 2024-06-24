@@ -7,3 +7,4 @@ Read more at https://secd.app.cloud.cbh.kth.se
 Mount the builds volume from nfs to somewhere on the server
 Set this mountpoint in config.yml
 
+Test push own fork!
