@@ -31,16 +31,22 @@
                     password: { type: "string", required: true },
                 },
         },
-    db:
-        {
-            type: "dict",
-            schema:
-                {
-                    host: { type: "string", required: true },
-                    username: { type: "string", required: true },
-                    password: { type: "string", required: true },
-                },
-        },
+    db: {
+        type: "dict",
+        schema:
+            {
+                mysql:
+                    {
+                        type: "dict",
+                        schema:
+                            {
+                                host: {type: 'string', required: true},
+                                username: {type: 'string', required: true},
+                                password: {type: 'string', required: true},
+                            },
+                        },
+            },
+    },
     registry:
         {
             type: "dict",

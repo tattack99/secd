@@ -2,12 +2,12 @@ import time
 import mysql.connector
 import uuid
 
-from typing import List
+from typing import List, Tuple
 from src.setup import get_settings
 
 
 def _with_mysql_client() -> mysql.connector.MySQLConnection:
-    msqlSettings = get_settings()['db']
+    msqlSettings = get_settings()['db']['mysql']
     client = mysql.connector.connect(
         host=msqlSettings['host'],
         user=msqlSettings['username'],
@@ -17,30 +17,50 @@ def _with_mysql_client() -> mysql.connector.MySQLConnection:
     return client
 
 
-def create_mysql_user(groups: List[str]):
-    client = _with_mysql_client()
+def create_mysql_user(groups: List[str]) -> Tuple[str, str]:
+    client = _with_mysql_client()  # Assuming this function provides a MySQL connection
     cursor = client.cursor()
 
-    # Create user
+    # Generate unique user and password
     db_user = str(uuid.uuid4()).replace('-', '')
     db_pass = str(uuid.uuid4()).replace('-', '')
 
-    cursor.execute(f"drop user if exists '{db_user}';")
-    cursor.execute(f"create user '{db_user}' identified by '{db_pass}';")
+    try:
+        # Drop user if exists
+        cursor.execute(f"DROP USER IF EXISTS '{db_user}';")
+        client.commit()  # Commit the transaction
 
-    # Create and assign groups
-    for group in groups:
-        cursor.execute(f"create role if not exists '{group}';")
-        cursor.execute(f"grant select on build_test.* to '{group}';")
-        cursor.execute(f"grant '{group}' to '{db_user}';")
+        # Create new user
+        cursor.execute(f"CREATE USER '{db_user}'@'%' IDENTIFIED BY '{db_pass}';")
+        client.commit()  # Commit the transaction
 
-    if len(groups) > 0:
-        cursor.execute(
-            f"alter user '{db_user}' default role {', '.join(groups)};")
+        # Create roles and grant read-only permissions
+        for group in groups:
+            cursor.execute(f"CREATE ROLE IF NOT EXISTS '{group}';")
+            cursor.execute(f"GRANT SELECT ON build_test.* TO '{group}';")
+            cursor.execute(f"GRANT '{group}' TO '{db_user}'@'%';")
+        client.commit()  # Commit the transaction after granting roles
 
-    return db_user, db_pass
+        # Set default roles for the user if any groups are specified
+        if groups:
+            cursor.execute(f"ALTER USER '{db_user}'@'%' DEFAULT ROLE {', '.join(groups)};")
+            client.commit()  # Commit the transaction
+
+        # Directly grant SELECT permissions to the user
+        cursor.execute(f"GRANT SELECT ON build_test.* TO '{db_user}'@'%';")
+        client.commit()  # Commit the transactio
+
+        return db_user, db_pass
+    except mysql.connector.Error as err:
+        print(f"Error: {err}")
+        client.rollback()  # Rollback in case of any error
+        raise
+    finally:
+        cursor.close()
+        client.close()
 
 
 def delete_mysql_user(db_user: str):
     client = _with_mysql_client()
     client.execute(f"drop user if exists '{db_user}';")
+

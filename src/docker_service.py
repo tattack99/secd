@@ -9,7 +9,7 @@ def _with_docker():
 
 
 def build_image(repo_path, image_name):
-    log(f"Building image {image_name} at {repo_path}") # 1
+    log(f"Building image {image_name} at {repo_path}")
     client = _with_docker()
     try:
         client.images.build(path=repo_path, tag=image_name)

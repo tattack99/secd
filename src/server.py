@@ -11,6 +11,7 @@ import src.keycloak_service as keycloak_service
 import src.mysql_service as mysql_service
 import src.docker_service as docker_service
 import src.k8s_service as k8s_service
+import src.db_service as db_service
 import src.daemon as daemon
 
 from wsgiref.simple_server import make_server
@@ -98,7 +99,6 @@ class HookResource:
             )
 
         # check if commit is from main branch
-
         if body['ref'] != 'refs/heads/main':
             log(f"Commit is not from main branch: {body['ref']}", "ERROR")
             raise falcon.HTTPBadRequest(
@@ -152,29 +152,14 @@ class HookResource:
                 keycloak_groups = keycloak_service.get_keycloak_user_groups(keycloak_user_id)
                 log(f"Keycloak user groups: {keycloak_groups}")
 
-                # create db user with groups
-                mysql_groups = []
-                for group in keycloak_groups:
-                    prefix = '/mysql_'
-                    if group['path'].startswith(prefix):
-                        mysql_groups.append(group['path'][len(prefix):])
-                log(f"MySQL groups: {mysql_groups}")
-
-
-                db_user, db_pass = mysql_service.create_mysql_user(mysql_groups)
-                log(f"MySQL user created: {db_user}")
-
-
                 # Run ID
                 run_id = str(uuid.uuid4()).replace('-', '')
                 log(f"Run ID: {run_id}")
-
 
                 # Clone repo
                 repo_path = f"{get_settings()['path']['repoPath']}/{run_id}"
                 gitlab_service.clone(body["project"]["http_url"], repo_path)
                 log(f"Repo cloned to {repo_path}")
-
 
                 # Create an output folder for the run
                 date = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -186,8 +171,21 @@ class HookResource:
                 run_meta = gitlab_service.get_metadata(f"{repo_path}/secd.yml")
                 run_for = run_meta['runfor']
                 gpu = run_meta['gpu']
+                db_database = run_meta['db_database']
                 log(f"Run meta: {run_meta}")
 
+                # database info
+                db_host = db_service.get_database_host(run_meta['db_type'])
+                if(run_meta['db_type'] == "mysql") :
+                    # create db user with groups
+                    mysql_groups = []
+                    for group in keycloak_groups:
+                        prefix = '/mysql_'
+                        if group['path'].startswith(prefix):
+                            mysql_groups.append(group['path'][len(prefix):])
+                    log(f"MySQL groups: {mysql_groups}")
+                    db_user, db_pass = mysql_service.create_mysql_user(mysql_groups)
+                    log(f"MySQL user created: {db_user}")
 
                 # Build image
                 reg_settings = get_settings()['registry']
@@ -196,7 +194,6 @@ class HookResource:
                 docker_service.build_image(repo_path, image_name)
                 docker_service.push_and_remove_image(image_name)
                 log(f"Image {image_name} built and pushed")
-
 
                 # Create namespace and output volume
                 pvc_repo_path = get_settings()['k8s']['pvcPath']
@@ -236,12 +233,12 @@ class HookResource:
                         f'{pvc_repo_path}/cache/{keycloak_user_id}/{cache_dir}', "cache")
                     log(f"Cache PVC created for {run_id}")
 
-
                 # Create pod
                 k8s_service.create_pod(run_id, image_name, {
                     "DB_USER": db_user,
                     "DB_PASS": db_pass,
-                    "DB_HOST": 'mysql.mysql.svc.cluster.local',
+                    "DB_HOST": db_host,
+                    "DB_DATABASE": db_database,
                     "OUTPUT_PATH": '/output',
                     "SECD": 'PRODUCTION'
                 }, gpu, mount_path)
