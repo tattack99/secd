@@ -12,6 +12,5 @@ if __name__ == '__main__':
         pass
     except Exception as e:
         log(f'Error: {e}', "ERROR")
-
     finally:
         log('Shutting down...')

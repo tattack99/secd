@@ -8,10 +8,8 @@ from src.logger import log
 
 def _with_k8s():
     config_path = get_settings()['k8s']['configPath']
-    #log(f"Loading Kubernetes config from {config_path}")
     config.load_kube_config(config_path)
     v1 = client.CoreV1Api()
-    #log("Kubernetes client initialized")
     return v1
 
 

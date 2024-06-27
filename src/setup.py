@@ -3,7 +3,6 @@ import os
 
 from cerberus import Validator
 
-
 def get_settings():
     """Get settings from config file"""
     global settings

@@ -17,7 +17,7 @@ def _with_mysql_client() -> mysql.connector.MySQLConnection:
     return client
 
 
-def create_mysql_user(groups: List[str]) -> Tuple[str, str]:
+def create_mysql_user(groups: List[str], database: str) -> Tuple[str, str]:
     client = _with_mysql_client()  # Assuming this function provides a MySQL connection
     cursor = client.cursor()
 
@@ -37,7 +37,7 @@ def create_mysql_user(groups: List[str]) -> Tuple[str, str]:
         # Create roles and grant read-only permissions
         for group in groups:
             cursor.execute(f"CREATE ROLE IF NOT EXISTS '{group}';")
-            cursor.execute(f"GRANT SELECT ON build_test.* TO '{group}';")
+            cursor.execute(f"GRANT SELECT ON {database}.* TO '{group}';")
             cursor.execute(f"GRANT '{group}' TO '{db_user}'@'%';")
         client.commit()  # Commit the transaction after granting roles
 
@@ -47,7 +47,7 @@ def create_mysql_user(groups: List[str]) -> Tuple[str, str]:
             client.commit()  # Commit the transaction
 
         # Directly grant SELECT permissions to the user
-        cursor.execute(f"GRANT SELECT ON build_test.* TO '{db_user}'@'%';")
+        cursor.execute(f"GRANT SELECT ON {database}.* TO '{db_user}'@'%';")
         client.commit()  # Commit the transactio
 
         return db_user, db_pass

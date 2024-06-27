@@ -184,7 +184,7 @@ class HookResource:
                         if group['path'].startswith(prefix):
                             mysql_groups.append(group['path'][len(prefix):])
                     log(f"MySQL groups: {mysql_groups}")
-                    db_user, db_pass = mysql_service.create_mysql_user(mysql_groups)
+                    db_user, db_pass = mysql_service.create_mysql_user(mysql_groups, db_database)
                     log(f"MySQL user created: {db_user}")
 
                 # Build image
