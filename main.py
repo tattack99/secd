@@ -1,5 +1,5 @@
-from src.services.setup import load_settings
-from src.services.logger import log
+from src.util.setup import load_settings
+from src.util.logger import log
 from src.util.server import Server
 
 if __name__ == '__main__':

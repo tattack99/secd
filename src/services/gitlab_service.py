@@ -8,8 +8,8 @@ import subprocess
 from typing import Dict
 from git import Repo
 from cerberus import Validator
-from src.services.logger import log
-from src.services.setup import load_settings, get_settings
+from src.util.logger import log
+from src.util.setup import load_settings, get_settings
 
 
 

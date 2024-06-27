@@ -1,6 +1,6 @@
 import docker
-from src.services.setup import load_settings, get_settings
-from src.services.logger import log
+from src.util.setup import load_settings, get_settings
+from src.util.logger import log
 
 
 def _with_docker():

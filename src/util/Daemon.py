@@ -1,7 +1,7 @@
 import time
 import src.services.k8s_service as k8s_service
 import src.services.gitlab_service as gitlab_service
-from src.services.logger import log
+from src.util.logger import log
 
 class Daemon:
     def __init__(self):
