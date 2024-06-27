@@ -1,24 +1,40 @@
+import datetime
+import os
+import uuid
 import falcon
 import json
-import uuid
-import shutil
 import threading
-import os
-import datetime
-
-import src.gitlab_service as gitlab_service
-import src.keycloak_service as keycloak_service
-import src.mysql_service as mysql_service
-import src.docker_service as docker_service
-import src.k8s_service as k8s_service
-import src.db_service as db_service
-import src.daemon as daemon
-
 from wsgiref.simple_server import make_server
-from cerberus import Validator
 
-from src.setup import get_settings
-from src.logger import log
+from cerberus import Validator
+from src.services.logger import log
+from src.services.setup import load_settings, get_settings
+import src.services.gitlab_service as gitlab_service
+import src.services.keycloak_service as keycloak_service
+import src.services.mysql_service as mysql_service
+import src.services.docker_service as docker_service
+import src.services.k8s_service as k8s_service
+import src.services.db_service as db_service
+from src.services.Daemon import Daemon
+
+class Server:
+    def __init__(self):
+        self.app = falcon.App()
+        self.app.add_route('/v1/hook', HookResource())
+
+    def run(self):
+        try:
+            log("Creating Daemon instance...")
+            daemon = Daemon()
+            log("Starting Daemon thread...")
+            daemon_thread = threading.Thread(target=daemon.run)
+            daemon_thread.start()
+        except Exception as e:
+            log(f"Error starting Daemon thread: {e}", "ERROR")
+
+        with make_server('', 8080, self.app) as httpd:
+            log('Serving on port 8080...')
+            httpd.serve_forever()
 
 
 class HookResource:
@@ -256,18 +272,3 @@ class HookResource:
         # Commit is ok, return 200
         resp.status = falcon.HTTP_200
 
-
-app = falcon.App()
-app.add_route('/v1/hook', HookResource())
-
-
-def run():
-    # Run daemon.run() in a new thread
-    daemon_thread = threading.Thread(target=daemon.run)
-    daemon_thread.start()
-
-    with make_server('', 8080, app) as httpd:
-        log('Serving on port 8080...')
-
-        # Serve until process is killed
-        httpd.serve_forever()

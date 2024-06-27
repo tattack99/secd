@@ -1,8 +1,8 @@
 import keycloak
 
 from typing import List
-from src.setup import get_settings
-from src.logger import log
+from src.services.setup import load_settings, get_settings
+from src.services.logger import log
 
 
 def _with_keycloak_client() -> keycloak.KeycloakAdmin:
