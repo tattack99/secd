@@ -4,9 +4,6 @@ import src.services.gitlab_service as gitlab_service
 from src.util.logger import log
 
 class Daemon:
-    def __init__(self):
-        pass
-
     def run(self):
         log("Starting daemon...")
         while True:

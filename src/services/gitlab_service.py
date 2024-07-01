@@ -9,8 +9,7 @@ from typing import Dict
 from git import Repo
 from cerberus import Validator
 from src.util.logger import log
-from src.util.setup import load_settings, get_settings
-
+from src.util.setup import get_settings
 
 
 def _with_gitlab_client() -> gitlab.Gitlab:

@@ -2,7 +2,7 @@ import datetime
 from kubernetes import client, config
 from typing import Dict, List
 
-from src.util.setup import load_settings, get_settings
+from src.util.setup import get_settings
 from src.util.logger import log
 
 

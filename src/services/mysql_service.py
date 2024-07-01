@@ -3,7 +3,7 @@ import mysql.connector
 import uuid
 
 from typing import List, Tuple
-from src.util.setup import load_settings, get_settings
+from src.util.setup import get_settings
 
 def _with_mysql_client() -> mysql.connector.MySQLConnection:
     msqlSettings = get_settings()['db']['mysql']

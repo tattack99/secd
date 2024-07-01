@@ -1,7 +1,11 @@
 import yaml
 import os
-
 from cerberus import Validator
+from dotenv import load_dotenv
+
+# Load environment variables from .env file if it exists
+load_dotenv(dotenv_path = '/home/cloud/secd/secd.env')
+settings = {}
 
 def get_settings():
     """Get settings from config file"""
@@ -10,22 +14,27 @@ def get_settings():
         load_settings()
     return settings
 
-
-def load_settings():
+def load_settings(config_path=None):
     """Load settings from config file"""
 
-    env_name = "CONFIG_FILE"
-    if env_name not in os.environ:
-        raise Exception(f'{env_name} is not set')
-    else:
-        config_path = os.environ[env_name]
+    # If config_path is not provided, use the environment variable or default path
+    if config_path is None:
+        config_path = os.getenv("CONFIG_FILE", "/home/cloud/secd/config.yml")
 
-    yaml_file = open(config_path, 'r')
-    loaded_yaml = yaml.load(yaml_file, Loader=yaml.FullLoader)
+    if not os.path.exists(config_path):
+        raise Exception(f'Config file not found: {config_path}')
+
+    with open(config_path, 'r') as yaml_file:
+        loaded_yaml = yaml.load(yaml_file, Loader=yaml.FullLoader)
 
     # match against schema
-    schema = yaml.load(open('settings-schema.yml', 'r'),
-                       Loader=yaml.FullLoader)
+    schema_path = "/home/cloud/secd/secure/settings-schema.yml"
+    if not os.path.exists(schema_path):
+        raise Exception(f'Schema file not found: {schema_path}')
+
+    with open(schema_path, 'r') as schema_file:
+        schema = yaml.load(schema_file, Loader=yaml.FullLoader)
+
     v = Validator(schema)
     if not v.validate(loaded_yaml):
         raise Exception(f'Invalid config file: {v.errors}')

@@ -3,8 +3,8 @@ import threading
 from wsgiref.simple_server import make_server
 
 from src.util.logger import log
-from src.util.HookResource import HookResource
-from src.util.Daemon import Daemon
+from src.util.hook_resource import HookResource
+from src.util.daemon import Daemon
 
 class Server:
     def __init__(self):
