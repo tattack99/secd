@@ -245,7 +245,6 @@ def create(body):
 
  # HookResource class
 class HookResource:
-
     def on_post(self, req, resp):
         event = req.get_header('X-Gitlab-Event')
         log(f"Received event: {event}")

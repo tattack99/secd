@@ -4,7 +4,7 @@ from cerberus import Validator
 from dotenv import load_dotenv
 
 # Load environment variables from .env file if it exists
-load_dotenv(dotenv_path = '/home/cloud/secd/secd.env')
+load_dotenv()
 settings = {}
 
 def get_settings():
@@ -19,7 +19,9 @@ def load_settings(config_path=None):
 
     # If config_path is not provided, use the environment variable or default path
     if config_path is None:
-        config_path = os.getenv("CONFIG_FILE", "/home/cloud/secd/config.yml")
+        config_path = os.getenv("CONFIG_FILE")
+        if not config_path:
+            raise Exception("CONFIG_FILE environment variable is not set and no config_path provided")
 
     if not os.path.exists(config_path):
         raise Exception(f'Config file not found: {config_path}')
