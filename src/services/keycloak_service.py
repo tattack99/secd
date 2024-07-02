@@ -15,7 +15,7 @@ def _with_keycloak_client() -> KeycloakAdmin:
     )
     return client
 
-def get_keycloak_user_groups(keycloak_user_id: str) -> List[str]:
+def get_user_groups(keycloak_user_id: str) -> List[str]:
     client = _with_keycloak_client()
 
     try:
@@ -52,6 +52,52 @@ def get_user_client_roles(user_id: str, client_id: str) -> Dict[str, any]:
         return None
     return roles
 
+def get_user_groups(user_id: str) -> List[Dict[str, any]]:
+    client = _with_keycloak_client()
+    try:
+        groups = client.get_user_groups(user_id=user_id)
+    except KeycloakGetError as e:
+        log(f'Error fetching groups for user {user_id}. Details: {e}', "ERROR")
+        return []
+    return groups
+
+def get_user_client_roles(user_id: str, client_id: str) -> List[Dict[str, any]]:
+    client = _with_keycloak_client()
+    try:
+        clients = client.get_clients()
+        client_internal_id = next((c['id'] for c in clients if c['clientId'] == client_id), None)
+
+        if not client_internal_id:
+            log(f'Client with clientId {client_id} not found', "ERROR")
+            return []
+
+        roles = client.get_client_roles_of_user(user_id=user_id, client_id=client_internal_id)
+    except KeycloakGetError as e:
+        log(f'Error fetching client roles for user {user_id} in client {client_id}. Details: {e}', "ERROR")
+        return []
+    return roles
+
+def check_user_in_group(user_id: str, group_name: str) -> bool:
+    groups = get_user_groups(user_id)
+    group_names = [group['name'] for group in groups]
+    log(f"User groups: {group_names}")
+    if group_name in group_names:
+        log(f"User is part of the '{group_name}' group.")
+        return True
+    else:
+        log(f"User is not part of the '{group_name}' group.")
+        return False
+
+def check_user_has_role(user_id: str, client_id: str, role_name: str) -> bool:
+    roles = get_user_client_roles(user_id, client_id)
+    role_names = [role['name'] for role in roles]
+    log(f"User roles: {role_names}")
+    if role_name in role_names:
+        log(f"User has access to '{role_name}' role.")
+        return True
+    else:
+        log(f"User does not have the '{role_name}' role.")
+        return False
 
 
 def create_temp_user(username: str, password: str) -> str:

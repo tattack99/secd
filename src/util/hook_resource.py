@@ -207,33 +207,16 @@ def create(body):
         gpu = run_meta['gpu']
         db_database = run_meta['db_database'] # TODO: This will specify which database that also exists in keycloak
 
+        # Check if user has 'mysql_test' role in 'database-service' client and is in 'secd' group
         user_have_permission = False
-
-        # Check if user in secd group
-        keycloak_groups = keycloak_service.get_keycloak_user_groups(keycloak_user_id)
-        group_names = [group['name'] for group in keycloak_groups]
-        log(f"User groups: {group_names}")
-        if "secd" in group_names:
-            log("User is part of the 'secd' group.")
-        else:
-            log("User is not part of the 'secd' group.")
-
-        # Check if user have 'mysql_test' role
-        user_roles = keycloak_service.get_user_client_roles(keycloak_user_id, "database-service")
-        role_names = [role['name'] for role in user_roles]
-        log(f"User roles: {role_names}")
-        if "mysql_test" in role_names:
-            log("User has access to 'mysql_test' database")
+        if keycloak_service.check_user_has_role(keycloak_user_id, "database-service", "mysql_test") and keycloak_service.check_user_in_group(keycloak_user_id, "secd"):
             user_have_permission = True
-        else:
-            log("User does not have the 'mysql_test' role.")
 
-        # Create temp keycloak user if user have access
         if user_have_permission:
+            log("User has the necessary permissions.")
             temp_user_id = keycloak_service.create_temp_user("temp_" + keycloak_user_id, "temp_password")
-            log(f"Temporary user created with ID: {temp_user_id}")
         else:
-            log(f"User do not have permission")
+            log("User does not have the necessary permissions.")
             return
 
         # Get database info
