@@ -51,18 +51,8 @@ def parse_request_body(req):
     log(f"Request body: {body}")
     return body
 
-def validate_body_with_schema(body, schema):
-    v = Validator(schema)
-    v.allow_unknown = True
-    if not v.validate(body):
-        log(f"Invalid body: {v.errors}", "ERROR")
-        raise falcon.HTTPBadRequest(
-            title='Bad request',
-            description=f'Invalid body: {v.errors}'
-        )
-
-# Usage within the original context
-schema = {
+def validate_body_schema(body):
+    schema = {
     'event_name': {'type': 'string'},
     'ref': {'type': 'string'},
     'user_id': {'type': 'integer'},
@@ -82,7 +72,16 @@ schema = {
             }
         }
     }
-}
+    }
+    v = Validator(schema)
+    v.allow_unknown = True
+    if not v.validate(body):
+        log(f"Invalid body: {v.errors}", "ERROR")
+        raise falcon.HTTPBadRequest(
+            title='Bad request',
+            description=f'Invalid body: {v.errors}'
+        )
+
 def validate_event_name(body):
     if body['event_name'] != 'push':
         log(f"Invalid event_name: {body['event_name']}", "ERROR")
@@ -127,38 +126,12 @@ def validate_dockerfile_presence(body):
             description=f'No Dockerfile found in project {body["project_id"]}'
         )
 
-def find_keycloak_user_id(gitlab_user_id):
-    keycloak_user_id = gitlab_service.get_idp_user_id(gitlab_user_id)
-    log(f"Keycloak user id: {keycloak_user_id}")
-    return keycloak_user_id
-
-def fetch_keycloak_user_groups(keycloak_user_id):
-    keycloak_groups = keycloak_service.get_keycloak_user_groups(keycloak_user_id)
-    log(f"Keycloak user groups: {keycloak_groups}")
-    return keycloak_groups
-
-def generate_run_id():
-    run_id = str(uuid.uuid4()).replace('-', '')
-    log(f"Run ID: {run_id}")
-    return run_id
-
-def clone_repo(body, run_id):
-    repo_path = f"{get_settings()['path']['repoPath']}/{run_id}"
-    gitlab_service.clone(body["project"]["http_url"], repo_path)
-    log(f"Repo cloned to {repo_path}")
-    return repo_path
-
-def create_output_folder(repo_path, run_id):
-    date = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    output_path = f'{repo_path}/outputs/{date}-{run_id}'
-    os.makedirs(output_path)
-    log(f"Output path created: {output_path}")
-    return output_path, date
-
-def get_run_meta(repo_path):
-    run_meta = gitlab_service.get_metadata(f"{repo_path}/secd.yml")
-    log(f"Run meta: {run_meta}")
-    return run_meta
+def validate_body(body):
+    validate_body_schema(body)
+    validate_event_name(body)
+    validate_commit_branch(body)
+    validate_commits_signature(body)
+    validate_dockerfile_presence(body)
 
 def handle_database_info(run_meta, keycloak_groups):
     db_host = db_service.get_database_host(run_meta['db_type'])
@@ -178,12 +151,6 @@ def build_and_push_image(repo_path, run_id):
     docker_service.push_and_remove_image(image_name)
     log(f"Image {image_name} built and pushed")
     return image_name
-
-def create_namespace_and_volume(keycloak_user_id, run_id, run_for, date):
-    pvc_repo_path = get_settings()['k8s']['pvcPath']
-    k8s_service.create_namespace(keycloak_user_id, run_id, run_for)
-    k8s_service.create_persistent_volume(run_id, f'{pvc_repo_path}/repos/{run_id}/outputs/{date}-{run_id}')
-    log(f"Namespace and output volume created for {run_id}")
 
 def handle_cache_dir(run_meta, keycloak_user_id, run_id):
     cache_dir = mount_path = None
@@ -219,50 +186,104 @@ def create(body):
     try:
         log("Starting create process...")
 
+        # Get user info
         gitlab_user_id = body['user_id']
-        keycloak_user_id = find_keycloak_user_id(gitlab_user_id)
-        keycloak_groups = fetch_keycloak_user_groups(keycloak_user_id)
+        keycloak_user_id = gitlab_service.get_idp_user_id(gitlab_user_id)
 
-        run_id = generate_run_id()
-        repo_path = clone_repo(body, run_id)
-        output_path, date = create_output_folder(repo_path, run_id)
+        # Clone repo
+        run_id = str(uuid.uuid4()).replace('-', '')
+        repo_path = f"{get_settings()['path']['repoPath']}/{run_id}"
+        gitlab_service.clone(body["project"]["http_url"], repo_path)
 
-        run_meta = get_run_meta(repo_path)
+        # Create output path
+        date = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        output_path = f'{repo_path}/outputs/{date}-{run_id}'
+        os.makedirs(output_path)
+        log(f"Output path created: {output_path}")
+
+        # Get metadata
+        run_meta = gitlab_service.get_metadata(f"{repo_path}/secd.yml")
         run_for = run_meta['runfor']
         gpu = run_meta['gpu']
-        db_database = run_meta['db_database']
+        db_database = run_meta['db_database'] # TODO: This will specify which database that also exists in keycloak
 
-        db_host, db_user, db_pass = handle_database_info(run_meta, keycloak_groups)
+        user_have_permission = False
+
+        # Check if user in secd group
+        keycloak_groups = keycloak_service.get_keycloak_user_groups(keycloak_user_id)
+        group_names = [group['name'] for group in keycloak_groups]
+        log(f"User groups: {group_names}")
+        if "secd" in group_names:
+            log("User is part of the 'secd' group.")
+        else:
+            log("User is not part of the 'secd' group.")
+
+        # Check if user have 'mysql_test' role
+        user_roles = keycloak_service.get_user_client_roles(keycloak_user_id, "database-service")
+        role_names = [role['name'] for role in user_roles]
+        log(f"User roles: {role_names}")
+        if "mysql_test" in role_names:
+            log("User has access to 'mysql_test' database")
+            user_have_permission = True
+        else:
+            log("User does not have the 'mysql_test' role.")
+
+        # Create temp keycloak user if user have access
+        if user_have_permission:
+            temp_user_id = keycloak_service.create_temp_user("temp_" + keycloak_user_id, "temp_password")
+            log(f"Temporary user created with ID: {temp_user_id}")
+        else:
+            log(f"User do not have permission")
+            return
+
+        # Get database info
         image_name = build_and_push_image(repo_path, run_id)
-        create_namespace_and_volume(keycloak_user_id, run_id, run_for, date)
+
+        # Creating namespace
+        pvc_repo_path = get_settings()['k8s']['pvcPath']
+        k8s_service.create_namespace(temp_user_id, run_id, run_for)
+        k8s_service.create_persistent_volume(run_id, f'{pvc_repo_path}/repos/{run_id}/outputs/{date}-{run_id}')
+        log(f"Namespace and output volume created for {run_id}")
+
+        # Creating pod
         cache_dir, mount_path = handle_cache_dir(run_meta, keycloak_user_id, run_id)
-        create_pod(run_id, image_name, db_user, db_pass, db_host, db_database, gpu, mount_path)
+
+        k8s_service.create_pod(run_id, image_name, {
+            "DB_USER": get_settings()['db']['mysql']['username'],
+            "DB_PASS": get_settings()['db']['mysql']['password'],
+            "DB_HOST": get_settings()['db']['mysql']['host'],
+            "DB_DATABASE": db_database,
+            "OUTPUT_PATH": '/output',
+            "SECD": 'PRODUCTION'
+        }, gpu, mount_path)
+        log(f"Pod created for {run_id}")
 
     except Exception as e:
         log(f"Error in create process: {str(e)}", "ERROR")
     else:
         log(f"Successfully launched {run_id}")
+    finally:
+        if(user_have_permission):
+            keycloak_service.delete_temp_user(temp_user_id)
+            log(f"temp user deleted: {temp_user_id}")
+
 
  # HookResource class
 class HookResource:
     def on_post(self, req, resp):
+        log("Starting hook process...")
+
         event = req.get_header('X-Gitlab-Event')
+        validate_event_token(event,req)
         log(f"Received event: {event}")
 
-        validate_event_token(event,req)
-
         body = parse_request_body(req)
+        validate_body(body)
         log(f"Request body: {body}")
 
-        validate_body_with_schema(body, schema)
-        validate_event_name(body)
-        validate_commit_branch(body)
-        validate_commits_signature(body)
-        validate_dockerfile_presence(body)
-
-        log("Hook processing completed successfully")
         resp.status = falcon.HTTP_200
         resp.media = {"status": "success"}
+        log("Hook processing completed successfully")
 
         threading.Thread(target=create(body=body)).start()
 
