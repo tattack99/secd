@@ -1,16 +1,10 @@
 import sys
 import os
-import uuid
-from keycloak import KeycloakAdmin, KeycloakGetError, KeycloakPostError
-import jwt
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
-
 import secure.src.services.keycloak_service as keycloak_service
-from secure.src.util.setup import load_settings
 from secure.src.util.logger import log
 
-load_settings()
+os.environ['CONFIG_FILE'] = '/home/cloud/secd/config/config.yml'
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
 
 # Test the functions
 def test_integration_set_role_user():

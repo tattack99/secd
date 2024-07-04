@@ -165,11 +165,8 @@ def cleanup_resources() -> List[str]:
     v1 = _with_k8s()
     run_ids = []
 
-    #log("Starting cleanup of resources")
-
     namespaces = v1.list_namespace()
     for namespace in namespaces.items:
-        #log(f"Checking namespace: {namespace.metadata.name}")
 
         annotations = namespace.metadata.annotations
         if annotations is None or 'rununtil' not in annotations:
@@ -177,7 +174,6 @@ def cleanup_resources() -> List[str]:
 
         rununtil = annotations.get('rununtil')
         expired = datetime.datetime.fromisoformat(rununtil) < datetime.datetime.now()
-        #log(f"Namespace: {namespace.metadata.name} has 'rununtil': {rununtil}, expired: {expired}")
 
         completed = False
         pod_list = v1.list_namespaced_pod(namespace=namespace.metadata.name)
@@ -201,5 +197,4 @@ def cleanup_resources() -> List[str]:
 
             run_ids.append(run_id)
 
-    #log(f"Cleanup completed, run_ids: {run_ids}")
     return run_ids

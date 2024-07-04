@@ -30,7 +30,7 @@ def load_settings(config_path=None):
         loaded_yaml = yaml.load(yaml_file, Loader=yaml.FullLoader)
 
     # match against schema
-    schema_path = "/home/cloud/secd/secure/settings-schema.yml"
+    schema_path = "/home/cloud/secd/secure/config/settings-schema.yml"
     if not os.path.exists(schema_path):
         raise Exception(f'Schema file not found: {schema_path}')
 

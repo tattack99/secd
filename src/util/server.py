@@ -13,12 +13,16 @@ class Server:
 
     def run(self):
         try:
-            log("Creating Daemon instance...")
-            daemon = Daemon()
+            log("Creating Daemon micrk8s_cleanup...")
+            micrk8s_cleanup = Daemon()
+            micrk8s_cleanup_thread = threading.Thread(target=micrk8s_cleanup.start_microk8s_cleanup)
+            micrk8s_cleanup_thread.start()
 
-            log("Starting Daemon thread...")
-            daemon_thread = threading.Thread(target=daemon.run)
-            daemon_thread.start()
+            log("Creating Daemon database_service...")
+            database_service = Daemon()
+            database_service_thread = threading.Thread(target=database_service.start_database_service)
+            database_service_thread.start()
+
 
         except Exception as e:
             log(f"Error starting Daemon thread: {e}", "ERROR")

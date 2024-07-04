@@ -13,7 +13,7 @@ import src.services.keycloak_service as keycloak_service
 import src.services.mysql_service as mysql_service
 import src.services.docker_service as docker_service
 import src.services.k8s_service as k8s_service
-import src.services.db_service as db_service
+import src.services.database_service as database_service
 
 # Helper functions
 def validate_event_token(event, req):
@@ -134,7 +134,7 @@ def validate_body(body):
     validate_dockerfile_presence(body)
 
 def handle_database_info(run_meta, keycloak_groups):
-    db_host = db_service.get_database_host(run_meta['db_type'])
+    db_host = database_service.get_database_host(run_meta['db_type'])
     db_user = db_pass = None
     if(run_meta['db_type'] == "mysql"):
         mysql_groups = [group['path'][len('/mysql_'):] for group in keycloak_groups if group['path'].startswith('/mysql_')]
@@ -218,6 +218,8 @@ def create(body):
         else:
             log("User does not have the necessary permissions.")
             return
+
+        # TODO: Set the tmp user role to be able to access the database
 
         # Get database info
         image_name = build_and_push_image(repo_path, run_id)
