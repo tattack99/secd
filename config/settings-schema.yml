@@ -22,14 +22,41 @@
         },
     keycloak:
         {
-            type: "dict",
-            schema:
+        type: "dict",
+        schema:
+            {
+                url: { type: "string", required: true },
+                realm: { type: "string", required: true },
+                username: { type: "string", required: true },
+                password: { type: "string", required: true },
+                gitlab:
                 {
-                    url: { type: "string", required: true },
-                    realm: { type: "string", required: true },
-                    username: { type: "string", required: true },
-                    password: { type: "string", required: true },
+                    type: "dict",
+                    schema:
+                    {
+                        client_id: { type: "string", required: true },
+                        client_secret: { type: "string", required: true },
+                    },
                 },
+                database-service:
+                {
+                    type: "dict",
+                    schema:
+                    {
+                        client_id: { type: "string", required: true },
+                        client_secret: { type: "string", required: true },
+                    },
+                },
+                admin-cli:
+                {
+                    type: "dict",
+                    schema:
+                    {
+                        client_id: { type: "string", required: true },
+                        client_secret: { type: "string", required: true },
+                    },
+                },
+            },
         },
     db: {
         type: "dict",

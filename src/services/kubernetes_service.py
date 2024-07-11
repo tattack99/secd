@@ -5,6 +5,10 @@ from typing import Dict, List
 from src.util.setup import get_settings
 from src.util.logger import log
 
+class KubernetesService:
+    def __init__(self) -> None:
+        pass
+
 
 def _with_k8s():
     config_path = get_settings()['k8s']['configPath']

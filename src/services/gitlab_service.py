@@ -11,6 +11,10 @@ from cerberus import Validator
 from src.util.logger import log
 from src.util.setup import get_settings
 
+class GitlabService:
+    def __init__(self) -> None:
+        pass
+
 
 def _with_gitlab_client() -> gitlab.Gitlab:
     glSettings = get_settings()['gitlab']

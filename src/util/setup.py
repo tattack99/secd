@@ -2,6 +2,7 @@ import yaml
 import os
 from cerberus import Validator
 from dotenv import load_dotenv
+from src.util.logger import log
 
 # Load environment variables from .env file if it exists
 load_dotenv()
@@ -16,6 +17,7 @@ def get_settings():
 
 def load_settings(config_path=None):
     """Load settings from config file"""
+    log('Loading settings...')
 
     # If config_path is not provided, use the environment variable or default path
     if config_path is None:

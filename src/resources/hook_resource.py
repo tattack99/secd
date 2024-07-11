@@ -8,11 +8,12 @@ import threading
 from cerberus import Validator
 from src.util.logger import log
 from src.util.setup import get_settings
+
 import src.services.gitlab_service as gitlab_service
 import src.services.keycloak_service as keycloak_service
 import src.services.mysql_service as mysql_service
 import src.services.docker_service as docker_service
-import src.services.k8s_service as k8s_service
+import src.services.kubernetes_service as kubernetes_service
 import src.services.database_service as database_service
 
 # Helper functions
@@ -167,12 +168,12 @@ def handle_cache_dir(run_meta, keycloak_user_id, run_id):
             log(f"Cache directory created at: {cache_path}")
 
         pvc_repo_path = get_settings()['k8s']['pvcPath']
-        k8s_service.create_persistent_volume(run_id, f'{pvc_repo_path}/cache/{keycloak_user_id}/{cache_dir}', "cache")
+        kubernetes_service.create_persistent_volume(run_id, f'{pvc_repo_path}/cache/{keycloak_user_id}/{cache_dir}', "cache")
         log(f"Cache PVC created for {run_id}")
     return cache_dir, mount_path
 
 def create_pod(run_id, image_name, db_user, db_pass, db_host, db_database, gpu, mount_path):
-    k8s_service.create_pod(run_id, image_name, {
+    kubernetes_service.create_pod(run_id, image_name, {
         "DB_USER": db_user,
         "DB_PASS": db_pass,
         "DB_HOST": db_host,
@@ -226,14 +227,14 @@ def create(body):
 
         # Creating namespace
         pvc_repo_path = get_settings()['k8s']['pvcPath']
-        k8s_service.create_namespace(temp_user_id, run_id, run_for)
-        k8s_service.create_persistent_volume(run_id, f'{pvc_repo_path}/repos/{run_id}/outputs/{date}-{run_id}')
+        kubernetes_service.create_namespace(temp_user_id, run_id, run_for)
+        kubernetes_service.create_persistent_volume(run_id, f'{pvc_repo_path}/repos/{run_id}/outputs/{date}-{run_id}')
         log(f"Namespace and output volume created for {run_id}")
 
         # Creating pod
         cache_dir, mount_path = handle_cache_dir(run_meta, keycloak_user_id, run_id)
 
-        k8s_service.create_pod(run_id, image_name, {
+        kubernetes_service.create_pod(run_id, image_name, {
             "DB_USER": get_settings()['db']['mysql']['username'],
             "DB_PASS": get_settings()['db']['mysql']['password'],
             "DB_HOST": get_settings()['db']['mysql']['host'],
@@ -253,8 +254,24 @@ def create(body):
             log(f"temp user deleted: {temp_user_id}")
 
 
- # HookResource class
 class HookResource:
+    def __init__(
+            self,
+            gitlab_service,
+            keycloak_service,
+            mysql_service,
+            docker_service,
+            kubernetes_service,
+            database_service
+            ):
+
+        self.gitlab = gitlab_service
+        self.keycloak = keycloak_service
+        self.mysql = mysql_service
+        self.docker = docker_service
+        self.k8s = kubernetes_service
+        self.database = database_service
+
     def on_post(self, req, resp):
         log("Starting hook process...")
 

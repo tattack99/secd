@@ -5,6 +5,10 @@ import uuid
 from typing import List, Tuple
 from src.util.setup import get_settings
 
+class MySQLService:
+    def __init__(self) -> None:
+        pass
+
 def _with_mysql_client() -> mysql.connector.MySQLConnection:
     msqlSettings = get_settings()['db']['mysql']
     client = mysql.connector.connect(

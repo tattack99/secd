@@ -2,6 +2,10 @@ import docker
 from src.util.setup import get_settings
 from src.util.logger import log
 
+class DockerService:
+    def __init__(self) -> None:
+        pass
+
 
 def _with_docker():
     client = docker.from_env()

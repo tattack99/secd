@@ -1,8 +1,60 @@
-from uuid import UUID
-from keycloak import KeycloakGetError, KeycloakAdmin, KeycloakPostError
+from keycloak import KeycloakAuthenticationError, KeycloakGetError, KeycloakAdmin, KeycloakOpenIDConnection, KeycloakPostError, KeycloakOpenID
 from typing import Dict, List
 from secure.src.util.setup import get_settings
 from secure.src.util.logger import log
+
+
+class KeycloakService:
+    def __init__(self):
+        self.kc_settings = get_settings()['keycloak']
+        keycloak_connection = KeycloakOpenIDConnection(
+            server_url=self.kc_settings['url'],
+            username=self.kc_settings['username'],
+            password=self.kc_settings['password'],
+            realm_name=self.kc_settings['realm'],
+            client_id=self.kc_settings['admin-cli']['client_id'],
+            verify=True)
+        self.keycloak_admin = KeycloakAdmin(connection=keycloak_connection)
+
+        self.keycloak_openid = KeycloakOpenID(
+            server_url=self.kc_settings['url'],
+            realm_name=self.kc_settings['realm'],
+            client_id=self.kc_settings['database-service']['client_id'],
+            client_secret_key=self.kc_settings['database-service']['client_secret'],
+        )
+
+    def validate_token(self, token):
+        try:
+            log(f"Validating token: {token}")
+            userinfo = self.keycloak_openid.introspect(token)
+            log(f"Token introspection response: {userinfo}")
+            if userinfo['active']:
+                log("Token is active")
+                return True
+            else:
+                log("Token is inactive")
+                return False
+        except KeycloakAuthenticationError as e:
+            log(f"Token validation error: {str(e)}", "ERROR")
+            return False
+
+    def get_access_token(self, username, password, grant_type='password'):
+        try:
+            log(f"Requesting access token with username: {username}, grant_type: {grant_type}")
+            token_response = self.keycloak_openid.token(username=username, password=password, grant_type=grant_type)
+            log(f"Access token response: {token_response}")
+            return token_response
+        except Exception as e:
+            log(f"Error obtaining access token: {str(e)}", "ERROR")
+            return None
+    def check_user_in_group(self, user_id, group):
+        return False
+
+    def check_user_has_role(self, user_id, client_id, role):
+        return False
+
+# Instantiate the KeycloakService
+keycloak_service = KeycloakService()
 
 def _with_keycloak_client() -> KeycloakAdmin:
     kcSettings = get_settings()['keycloak']
@@ -14,6 +66,12 @@ def _with_keycloak_client() -> KeycloakAdmin:
         verify=True
     )
     return client
+
+def validate_token(token):
+    return keycloak_service.validate_token(token)
+
+def get_access_token(username, password, grant_type):
+    return keycloak_service.get_access_token(username,password,grant_type)
 
 def get_user_groups(keycloak_user_id: str) -> List[str]:
     client = _with_keycloak_client()
@@ -142,9 +200,12 @@ def assign_role_to_user(user_id: str, client_id: str, role: str) -> bool:
         return False
 
     internal_client_id = next((c['id'] for c in clients if c['clientId'] == client_id), None)
+    if not internal_client_id:
+        log(f'Error: Client {client_id} not found', "ERROR")
+        return False
+
     try:
         roles = client.get_client_roles(client_id=internal_client_id)
-        log(f"Roles for client {client_id}: {roles}")
     except KeycloakGetError as e:
         log(f'Error fetching roles for client {client_id}. Details: {e}', "ERROR")
         return False
@@ -154,9 +215,8 @@ def assign_role_to_user(user_id: str, client_id: str, role: str) -> bool:
         log(f'Error: Role {role} not found for client {client_id}', "ERROR")
         return False
 
-
     try:
-        client.assign_client_role(user_id=user_id, client_id=client_id, roles=[role_representation])
+        client.assign_client_role(user_id=user_id, client_id=internal_client_id, roles=[role_representation])
     except KeycloakPostError as e:
         log(f'Error assigning role {role} to user {user_id}. Details: {e}', "ERROR")
         return False
