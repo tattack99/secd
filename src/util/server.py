@@ -1,18 +1,18 @@
 import falcon
 import threading
 from wsgiref.simple_server import make_server
-from src.util.setup import load_settings
-from src.resources.database_resource import DatabaseResource
-from src.resources.keycloak_resource import KeycloakResource
-from src.resources.hook_resource import HookResource
-from src.services.database_service import DatabaseService
-from src.services.docker_service import DockerService
-from src.services.gitlab_service import GitlabService
-from src.services.keycloak_service import KeycloakService
-from src.services.kubernetes_service import KubernetesService
-from src.services.mysql_service import MySQLService
-from src.util.logger import log
-from src.util.daemon import Daemon
+from secure.src.util.setup import load_settings
+from secure.src.resources.database_resource import DatabaseResource
+from secure.src.resources.keycloak_resource import KeycloakResource
+from secure.src.resources.hook_resource import HookResource
+from secure.src.services.database_service import DatabaseService
+from secure.src.services.docker_service import DockerService
+from secure.src.services.gitlab_service import GitlabService
+from secure.src.services.keycloak_service import KeycloakService
+from secure.src.services.kubernetes_service import KubernetesService
+from secure.src.services.mysql_service import MySQLService
+from secure.src.util.logger import log
+from secure.src.util.daemon import Daemon
 
 class Server:
     def __init__(self):
@@ -36,9 +36,12 @@ class Server:
             docker_service=self.docker_service,
             mysql_service=self.mysql_service)
 
-        self.database_resource = DatabaseResource(database_service=self.database_service)
+        self.database_resource = DatabaseResource(
+            database_service=self.database_service,
+            keycloak_service=self.keycloak_service)
 
-        self.keycloak_resource = KeycloakResource(keycloak_service=self.keycloak_service)
+        self.keycloak_resource = KeycloakResource(
+            keycloak_service=self.keycloak_service)
 
         # Add routes
         self.app = falcon.App()
@@ -51,12 +54,12 @@ class Server:
 
             # TODO: Extract these Daemon to standalone microservices
             log("Creating Daemon micrk8s_cleanup...")
-            micrk8s_cleanup = Daemon(self.kubernetes_service, self.docker_service, self.database_service)
+            micrk8s_cleanup = Daemon(self.kubernetes_service, self.gitlab_service, self.database_service)
             micrk8s_cleanup_thread = threading.Thread(target=micrk8s_cleanup.start_microk8s_cleanup)
             micrk8s_cleanup_thread.start()
 
             log("Creating Daemon database_service...")
-            database_service = Daemon(self.kubernetes_service, self.docker_service, self.database_service)
+            database_service = Daemon(self.kubernetes_service, self.gitlab_service, self.database_service)
             database_service_thread = threading.Thread(target=database_service.start_database_service)
             database_service_thread.start()
 

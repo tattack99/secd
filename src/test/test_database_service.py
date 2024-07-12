@@ -6,7 +6,7 @@ import requests
 os.environ['CONFIG_FILE'] = '/home/cloud/secd/config/config.yml'
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
 
-import secure.src.services.keycloak_service as keycloak_service
+from secure.src.services.keycloak_service import KeycloakService
 from secure.src.util.setup import get_settings
 
 BASE_URL = 'https://gitlab.secd/v1/database'
@@ -22,19 +22,17 @@ PASSWORD = "temp_password"
 
 @pytest.fixture(scope='module')
 def setup_keycloak_user():
-    # Create test user
+    keycloak_service = KeycloakService()
+
     user_id = keycloak_service.create_temp_user(USERNAME, PASSWORD)
     if user_id:
         print(f"User {USERNAME} created with ID: {user_id}")
 
-        # Assign role to user
         if keycloak_service.assign_role_to_user(user_id, CLIENT_ID, ROLE):
             print(f"Role {ROLE} assigned to user ID: {user_id}")
 
-        # Yield control to the test
         yield user_id
 
-        # Clean up after the test completes
         if keycloak_service.delete_temp_user(user_id):
             print(f"User ID: {user_id} deleted")
     else:
@@ -55,7 +53,10 @@ def get_access_token(username, password):
     return response.json().get("access_token")
 
 def test_get_database_authorized(setup_keycloak_user):
+    keycloak_service = KeycloakService()
+    
     token = keycloak_service.get_access_token(USERNAME, PASSWORD, GRANT_TYPE)
+
     headers = {'Authorization': f'Bearer {token}'}
     print(f"Authorization header: {headers}")
     response = requests.get(BASE_URL, headers=headers)

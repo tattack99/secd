@@ -1,15 +1,17 @@
 import sys
 import os
-import secure.src.services.keycloak_service as keycloak_service
+from secure.src.services.keycloak_service import KeycloakService
 from secure.src.util.logger import log
 
 os.environ['CONFIG_FILE'] = '/home/cloud/secd/config/config.yml'
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
 
-# Test the functions
 def test_integration_set_role_user():
     username = "testuser"
     password = "testpassword"
+
+    # Instantiate the KeycloakService
+    keycloak_service = KeycloakService()
 
     # create test user
     user_id = keycloak_service.create_temp_user(username, password)
