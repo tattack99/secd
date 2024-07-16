@@ -20,7 +20,6 @@ class GitlabService:
             )
 
     def has_file_in_repo(self, project_id: str, file_path: str, ref: str) -> bool:
-        #client = _with_gitlab_client()
         client = self.client
 
         try:
@@ -79,7 +78,6 @@ class GitlabService:
 
 
     def get_signature(self, project_id: str, commit_id: str) -> Dict[str, any]:
-        #client = _with_gitlab_client()
         client = self.client
 
         try:
@@ -105,7 +103,6 @@ class GitlabService:
 
 
     def get_idp_user_id(self, gitlab_user_id: int) -> str:
-        #client = _with_gitlab_client()
         client = self.client
 
         try:
@@ -171,13 +168,3 @@ class GitlabService:
             pass
 
         shutil.rmtree(repo_path, ignore_errors=True)
-
-
-"""
-def _with_gitlab_client() -> gitlab.Gitlab:
-    glSettings = get_settings()['gitlab']
-    client = gitlab.Gitlab(
-        glSettings['url'], private_token=glSettings['token'])
-
-    return client
-"""

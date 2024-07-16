@@ -8,8 +8,6 @@ import threading
 from cerberus import Validator
 from src.util.logger import log
 from src.util.setup import get_settings
-
-# correct way of importing
 from src.services.gitlab_service import GitlabService
 from src.services.keycloak_service import KeycloakService
 from src.services.mysql_service import MySQLService

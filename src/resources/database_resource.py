@@ -3,7 +3,6 @@ from src.services.database_service import DatabaseService
 from src.services.keycloak_service import KeycloakService
 from src.util.logger import log
 from falcon import HTTPUnauthorized
-
 import falcon
 
 class DatabaseResource:
@@ -19,24 +18,28 @@ class DatabaseResource:
     def on_get(self, req, resp):
         log("Handling GET /v1/database request")
         try:
-            # Validate token
-            token = req.get_header('Authorization')
-            self.keycloak_service.validate_token(token)
+            auth_header = req.get_header('Authorization')
+            if not auth_header:
+                log("Authorization header missing", "WARNING")
+                raise HTTPUnauthorized(description="Authorization header missing")
 
-            # Validate keycloak user have access to database
-            #database = req.get_param('database')
-            #self.keycloak_service.validate_database_role(database)
+            valid_header = self.keycloak_service.validate(auth_header)
+            if not valid_header:
+                log("Not valid authorization header", "WARNING")
+                raise HTTPUnauthorized(description="Authorization header missing")
 
-            #host = self.database_service.get_database_host(database)
 
-
+            resp.status = falcon.HTTP_200
+            resp.media = {"message": "Access granted"}
+        except HTTPUnauthorized as e:
+            log(f"Authorization failed: {str(e)}", "WARNING")
+            resp.status = falcon.HTTP_401
+            resp.media = {"error": str(e)}
         except KeycloakAuthenticationError as e:
-            log(f"Token validation error: {e.error_message}", "ERROR")
-            raise HTTPUnauthorized(description=e.error_message)
+            log(f"Authentication failed: {str(e)}", "WARNING")
+            resp.status = falcon.HTTP_401
+            resp.media = {"error": str(e)}
         except Exception as e:
-            log(f"Error: {e}", "ERROR")
-            resp.media = {'message': 'Failed'}
+            log(f"Unexpected error: {str(e)}", "ERROR")
             resp.status = falcon.HTTP_500
-
-        resp.media = {'message': 'Success'}
-        resp.status = falcon.HTTP_200
+            resp.media = {"error": "Internal server error"}

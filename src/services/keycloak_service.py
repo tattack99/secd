@@ -1,3 +1,5 @@
+import datetime
+import json
 from keycloak import KeycloakAuthenticationError, KeycloakGetError, KeycloakAdmin, KeycloakOpenIDConnection, KeycloakPostError, KeycloakOpenID
 from typing import Dict, List
 from secure.src.util.setup import get_settings
@@ -24,12 +26,11 @@ class KeycloakService:
         )
 
     def create_temp_user(self, username: str, password: str) -> str:
-        #client = _with_keycloak_client()
         client = self.keycloak_admin
         UserRepresentation = {
             "username": username,
             "enabled": True,
-            "credentials": [{"type": "password", "value": password, "temporary": False}],
+            "credentials": [{"type": "password", "value": password, "temporary": True}],
             "firstName": "Temp",
             "lastName": "User",
             "email": f"{username}@example.com",
@@ -44,7 +45,6 @@ class KeycloakService:
         return user_id
 
     def delete_temp_user(self, user_id: str) -> bool:
-        #client = _with_keycloak_client()
         client = self.keycloak_admin
 
         try:
@@ -56,7 +56,6 @@ class KeycloakService:
         return True
 
     def assign_role_to_user(self, user_id: str, client_id: str, role: str) -> bool:
-        #client = _with_keycloak_client()
         client = self.keycloak_admin
 
         try:
@@ -89,40 +88,66 @@ class KeycloakService:
 
         return True
 
-    def validate_token(self, token):
+    def authenticate(self, auth_header):
+        token = auth_header.split(' ')[1]
         try:
             if not token:
                 raise KeycloakAuthenticationError("Authorization token required")
 
-            log(f"Validating token: {token}")
-            userinfo = self.keycloak_openid.introspect(token)
-            log(f"Token introspection response: {userinfo}")
-            if userinfo['active']:
-                log("Token is active")
-                return True
-            else:
-                log("Token is inactive")
-                return False
+            token = token.split(' ')[1]
+            log(f"Authenticating token: {token}")
+            userinfo = self.keycloak_openid.userinfo(token)
+            log(f"User info: {userinfo}")
+            if 'error' in userinfo:
+                log(f"User info error: {userinfo['error_description']}", "ERROR")
+                raise KeycloakAuthenticationError(userinfo['error_description'])
+            return userinfo
         except KeycloakAuthenticationError as e:
-            log(f"Token validation error: {str(e.error_message)}", "ERROR")
+            log(f"User authentication error: {str(e)}", "ERROR")
             raise KeycloakAuthenticationError("Invalid authorization token")
 
-    def get_access_token(self, username, password, grant_type='password'):
+    def validate(self, auth_header):
+            log(f"auth_header: {auth_header}")
+            try:
+                parts = auth_header.split(' ')
+                if len(parts) != 2 or parts[0].lower() != 'bearer':
+                    raise KeycloakAuthenticationError("Invalid authorization header format")
+
+                token = parts[1]
+                log(f"Validating token: {token}")
+
+                if not token:
+                    raise KeycloakAuthenticationError("Authorization token required")
+
+                userinfo = self.keycloak_openid.introspect(token)
+                log(f"Token introspection response: {json.dumps(userinfo, indent=2)}")
+
+                if userinfo.get('active'):
+                    log("Token is active")
+                    return True
+                else:
+                    log("Token is inactive")
+                    return False
+
+            except KeycloakAuthenticationError as e:
+                log(f"Token validation error: {str(e)}", "ERROR")
+                raise KeycloakAuthenticationError("Invalid authorization token")
+            except Exception as e:
+                log(f"Unexpected error during token validation: {str(e)}", "ERROR")
+                raise KeycloakAuthenticationError("Error during token validation")
+
+    def get_access_token_username_password(self, username, password) -> dict[str, str]:
         try:
-            log(f"Requesting access token with username: {username}, grant_type: {grant_type}")
-            token_response = self.keycloak_openid.token(username=username, password=password, grant_type=grant_type)
-            log(f"Access token response: {token_response}")
-            return token_response
+            log(f"Requesting access token with username: {username}")
+            token = self.keycloak_openid.token(username=username, password=password, grant_type="client_credentials")
+            log(f"Access token response: {token}")
+            return token
+
         except Exception as e:
             log(f"Error obtaining access token: {str(e)}", "ERROR")
-            return None
-
-    def get_access_token_by_user_id(self, user_id):
-        return False
-
+            return {}
 
     def get_user_realm_roles(self,user_id: str) -> Dict[str, any]:
-        #client = _with_keycloak_client()
         client = self.keycloak_admin
         try:
             roles = client.get_realm_roles_of_user(user_id)
@@ -132,7 +157,6 @@ class KeycloakService:
         return roles
 
     def get_user_groups(self,user_id: str) -> List[Dict[str, any]]:
-        #client = _with_keycloak_client()
         client = self.keycloak_admin
         try:
             groups = client.get_user_groups(user_id=user_id)
@@ -142,7 +166,6 @@ class KeycloakService:
         return groups
 
     def get_user_client_roles(self,user_id: str, client_id: str) -> List[Dict[str, any]]:
-        #client = _with_keycloak_client()
         client = self.keycloak_admin
         try:
             clients = client.get_clients()
@@ -180,15 +203,3 @@ class KeycloakService:
             log(f"User does not have the '{role_name}' role.")
             return False
 
-"""
-def _with_keycloak_client() -> KeycloakAdmin:
-    kcSettings = get_settings()['keycloak']
-    client = KeycloakAdmin(
-        server_url=kcSettings['url'],
-        username=kcSettings['username'],
-        password=kcSettings['password'],
-        realm_name=kcSettings['realm'],
-        verify=True
-    )
-    return client
-"""

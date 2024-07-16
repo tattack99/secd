@@ -1,5 +1,6 @@
 import sys
 import os
+from typing import Any, Dict
 import pytest
 import requests
 
@@ -9,7 +10,9 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '.
 from secure.src.services.keycloak_service import KeycloakService
 from secure.src.util.setup import get_settings
 
-BASE_URL = 'https://gitlab.secd/v1/database'
+#BASE_URL = 'https://gitlab.secd/v1/database'
+BASE_URL = 'http://localhost:8001/v1/database'
+#KEYCLOAK_URL = "https://iam.secd/realms/cloud/protocol/openid-connect/token"
 KEYCLOAK_URL = "https://iam.secd/realms/cloud/protocol/openid-connect/token"
 CLIENT_ID = get_settings()['keycloak']['database-service']['client_id']
 CLIENT_SECRET = get_settings()['keycloak']['database-service']['client_secret']
@@ -17,8 +20,6 @@ GRANT_TYPE = "client_credentials"
 ROLE = "mysql_test"
 USERNAME = "temp_user"
 PASSWORD = "temp_password"
-
-
 
 @pytest.fixture(scope='module')
 def setup_keycloak_user():
@@ -38,48 +39,36 @@ def setup_keycloak_user():
     else:
         raise Exception("Failed to create user")
 
-def get_access_token(username, password):
-    response = requests.post(KEYCLOAK_URL, data={
-        "grant_type": GRANT_TYPE,
-        "client_id": CLIENT_ID,
-        "client_secret": CLIENT_SECRET,
-        "username": username,
-        "password": password
-    })
-    print("Keycloak response status code:", response.status_code)
-    print("Keycloak response body:", response.text)
-    if response.status_code != 200:
-        response.raise_for_status()
-    return response.json().get("access_token")
-
-def test_get_database_authorized(setup_keycloak_user):
-    keycloak_service = KeycloakService()
-    
-    token = keycloak_service.get_access_token(USERNAME, PASSWORD, GRANT_TYPE)
-
-    headers = {'Authorization': f'Bearer {token}'}
-    print(f"Authorization header: {headers}")
-    response = requests.get(BASE_URL, headers=headers)
-    print("Database service response status code:", response.status_code)
-    print("Database service response headers:", response.headers)
-    print("Database service response body:", response.text)
-    assert 200 == response.status_code, f"Expected 200 but got {response.status_code}"
-
-def test_get_database_unauthorized():
-    headers = {'Authorization': 'Bearer invalid'}
-    print(f"Authorization header: {headers}")
-    response = requests.get(BASE_URL, headers=headers)
+def test_get_database_no_header():
+    response = requests.get(BASE_URL)
     print("Database service response status code:", response.status_code)
     print("Database service response headers:", response.headers)
     print("Database service response body:", response.text)
     assert 401 == response.status_code, f"Expected 401 but got {response.status_code}"
 
 
-def test_post_database():
-    pass
+def test_get_database_incorrect_auth():
+    keycloak_service = KeycloakService()
+    token = keycloak_service.get_access_token_username_password(USERNAME, PASSWORD)
+    headers = {'Authorization': f'Bearer {token} invalid'}
 
-def test_put_database():
-    pass
+    response = requests.get(BASE_URL, headers=headers)
+    print("Database service response status code:", response.status_code)
+    print("Database service response headers:", response.headers)
+    print("Database service response body:", response.text)
+    assert 401 == response.status_code, f"Expected 401 but got {response.status_code}"
 
-def test_delete_database():
-    pass
+def test_get_database_correct_auth():
+    keycloak_service = KeycloakService()
+    token_response: Dict[str, Any] = keycloak_service.get_access_token_username_password(USERNAME, PASSWORD)
+    token = token_response['access_token']
+    headers = {'Authorization': f'Bearer {token}'}
+
+    print(f'headers: {headers}')
+
+    response = requests.get(BASE_URL, headers=headers)
+    print("Database service response status code:", response.status_code)
+    print("Database service response headers:", response.headers)
+    print("Database service response body:", response.text)
+    assert 200 == response.status_code, f"Expected 200 but got {response.status_code}"
+

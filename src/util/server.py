@@ -13,6 +13,7 @@ from secure.src.services.kubernetes_service import KubernetesService
 from secure.src.services.mysql_service import MySQLService
 from secure.src.util.logger import log
 from secure.src.util.daemon import Daemon
+from secure.src.middleware.keycloak_auth_middleware import KeycloakAuthMiddleware
 
 class Server:
     def __init__(self):
@@ -43,16 +44,37 @@ class Server:
         self.keycloak_resource = KeycloakResource(
             keycloak_service=self.keycloak_service)
 
-        # Add routes
-        self.app = falcon.App()
-        self.app.add_route('/v1/hook',self.hook_resource)
-        self.app.add_route('/v1/database',self.database_resource)
-        self.app.add_route('/v1/keycloak',self.keycloak_resource)
+        # Instantiate middleware
+        self.keycloak_auth_middleware = KeycloakAuthMiddleware(keycloak_service=self.keycloak_service)
+
+        # Create multiple apps
+        self.create_hook_app()
+        self.create_database_app()
+        self.create_keycloak_app()
+
+    def create_hook_app(self):
+        self.hook_app = falcon.App()
+        #self.hook_app.add_middleware(self.keycloak_auth_middleware)
+        self.hook_app.add_route('/v1/hook', self.hook_resource)
+
+    def create_database_app(self):
+        self.database_app = falcon.App()
+        #self.database_app.add_middleware(self.keycloak_auth_middleware)
+        self.database_app.add_route('/v1/database', self.database_resource)
+
+    def create_keycloak_app(self):
+        self.keycloak_app = falcon.App()
+        #self.keycloak_app.add_middleware(self.keycloak_auth_middleware)
+        self.keycloak_app.add_route('/v1/keycloak', self.keycloak_resource)
+
+    def serve_app(self, app, port):
+        with make_server('', port, app) as httpd:
+            log(f"Serving on port {port}...")
+            httpd.serve_forever()
 
     def run(self):
         try:
-
-            # TODO: Extract these Daemon to standalone microservices
+            # Extract these Daemon to standalone microservices
             log("Creating Daemon micrk8s_cleanup...")
             micrk8s_cleanup = Daemon(self.kubernetes_service, self.gitlab_service, self.database_service)
             micrk8s_cleanup_thread = threading.Thread(target=micrk8s_cleanup.start_microk8s_cleanup)
@@ -63,10 +85,21 @@ class Server:
             database_service_thread = threading.Thread(target=database_service.start_database_service)
             database_service_thread.start()
 
+            # Serve each app on different ports in separate threads
+            database_thread = threading.Thread(target=self.serve_app, args=(self.database_app, 8001))
+            keycloak_thread = threading.Thread(target=self.serve_app, args=(self.keycloak_app, 8002))
+
+            database_thread.start()
+            keycloak_thread.start()
+
+            # main thread hook resource
+            with make_server('', 8080, self.hook_app) as httpd:
+                log('Serving on port 8080...')
+                httpd.serve_forever()
+
+
 
         except Exception as e:
             log(f"Error starting Daemon thread: {e}", "ERROR")
 
-        with make_server('', 8080, self.app) as httpd:
-            log('Serving on port 8080...')
-            httpd.serve_forever()
+

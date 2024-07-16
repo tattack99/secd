@@ -14,7 +14,6 @@ class MySQLService:
         )
 
     def create_mysql_user(self, groups: List[str], database: str) -> Tuple[str, str]:
-        #client = _with_mysql_client()  # Assuming this function provides a MySQL connection
         client = self.client
         cursor = self.client.cursor()
 
@@ -61,16 +60,3 @@ class MySQLService:
         #client = _with_mysql_client()
         client = self.client
         client.execute(f"drop user if exists '{db_user}';")
-
-
-"""
-def _with_mysql_client() -> mysql.connector.MySQLConnection:
-    msqlSettings = get_settings()['db']['mysql']
-    client = mysql.connector.connect(
-        host=msqlSettings['host'],
-        user=msqlSettings['username'],
-        password=msqlSettings['password'],
-    )
-
-    return client
-"""
