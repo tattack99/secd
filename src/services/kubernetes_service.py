@@ -11,9 +11,20 @@ class KubernetesService:
         config.load_kube_config(self.config_path)
         self.v1 = client.CoreV1Api()
 
+    def get_pod_in_namespace(self, namespace: str) -> List[str]:
+        v1 = self.v1
+        pods = v1.list_namespaced_pod(namespace)
+        return [pod.metadata.name for pod in pods.items]
+
+    def get_pod_ip_in_namespace(self, namespace, pod_name_prefix):
+        v1 = self.v1
+        pods = v1.list_namespaced_pod(namespace)
+        for pod in pods.items:
+            if pod_name_prefix in pod.metadata.name:
+                return pod.status.pod_ip
+        return None
 
     def create_namespace(self, user_id: str, run_id: str, run_for: datetime):
-        #v1 = _with_k8s()
         v1 = self.v1
         run_until = datetime.datetime.now() + datetime.timedelta(hours=run_for)
         namespace_name = f"secd-{run_id}"
@@ -198,10 +209,3 @@ class KubernetesService:
                 run_ids.append(run_id)
 
         return run_ids
-"""
-def _with_k8s():
-    config_path = get_settings()['k8s']['configPath']
-    config.load_kube_config(config_path)
-    v1 = client.CoreV1Api()
-    return v1
-"""

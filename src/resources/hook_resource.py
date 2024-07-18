@@ -1,9 +1,12 @@
 import datetime
 import os
+from typing import Dict
 import uuid
 import falcon
 import json
 import threading
+import gitlab
+import requests
 
 from cerberus import Validator
 from src.util.logger import log
@@ -35,36 +38,39 @@ class HookResource:
 
     def on_post(self, req, resp):
         log("Starting hook process...")
+        try:
 
-        event = req.get_header('X-Gitlab-Event')
-        self.validate_event_token(event,req)
-        log(f"Received event: {event}")
+            self.gitlab_service.validate_event_token(req)
+            event = req.get_header('X-Gitlab-Event')
+            log(f"Received event: {event}")
 
-        body = self.parse_request_body(req)
-        self.validate_body(body)
-        log(f"Request body: {body}")
+            body = self.parse_request_body(req)
+            self.validate_body(body)
+            log(f"Request body: {body}")
 
-        resp.status = falcon.HTTP_200
-        resp.media = {"status": "success"}
-        log("Hook processing completed successfully")
+            resp.status = falcon.HTTP_200
+            resp.media = {"status": "success"}
+            log("Hook processing completed successfully")
 
-        threading.Thread(target=self.create(body=body)).start()
+            threading.Thread(target=self.create(body=body)).start()
 
-        resp.status = falcon.HTTP_200
+        except gitlab.GitlabHeadError as e:
+            log(f"Header validation error: {str(e)}", "ERROR")
+            resp.status = falcon.HTTP_400
+            resp.media = {"error": str(e)}
+        except gitlab.GitlabAuthenticationError as e:
+            log(f"Authentication error: {str(e)}", "ERROR")
+            resp.status = falcon.HTTP_401
+            resp.media = {"error": str(e)}
+        except falcon.HTTPBadRequest as e:
+            log(f"Authentication error: {str(e)}", "ERROR")
+            resp.status = falcon.HTTP_401
+            resp.media = {"error": str(e)}
+        except Exception as e:
+            log(f"Unexpected error: {str(e)}", "ERROR")
+            resp.status = falcon.HTTP_500
+            resp.media = {"error": "Internal server error"}
 
-    def validate_event_token(self, event, req):
-        if event not in ['Push Hook', 'System Hook']:
-            log(f"Invalid X-Gitlab-Event header: {event}", "ERROR")
-            raise falcon.HTTPBadRequest(
-                title='Bad request',
-                description='Invalid X-Gitlab-Event header'
-            )
-        if req.get_header('X-Gitlab-Token') != get_settings()['gitlab']['secret']:
-            log("Unauthorized access: Invalid token", "ERROR")
-            raise falcon.HTTPUnauthorized(
-                title='Unauthorized',
-                description='Invalid token'
-            )
 
     def parse_request_body(self, req):
         body_raw = req.bounded_stream.read()
@@ -169,6 +175,7 @@ class HookResource:
         self.validate_commits_signature(body)
         self.validate_dockerfile_presence(body)
 
+    """
     def handle_database_info(self, run_meta, keycloak_groups):
         db_host = self.database_service.get_database_host(run_meta['db_type'])
         db_user = db_pass = None
@@ -178,7 +185,7 @@ class HookResource:
             db_user, db_pass = self.mysql_service.create_mysql_user(mysql_groups, run_meta['db_database'])
             log(f"MySQL user created: {db_user}")
         return db_host, db_user, db_pass
-
+    """
     def build_and_push_image(self, repo_path, run_id):
         reg_settings = get_settings()['registry']
         image_name = f"{reg_settings['url']}/{reg_settings['project']}/{run_id}"
@@ -207,12 +214,12 @@ class HookResource:
             log(f"Cache PVC created for {run_id}")
         return cache_dir, mount_path
 
-    def create_pod(self, run_id, image_name, db_user, db_pass, db_host, db_database, gpu, mount_path):
+    def create_pod(self, run_id, image_name, db_user, db_pass, db_host, gpu, mount_path):
         self.kubernetes_service.create_pod(run_id, image_name, {
             "DB_USER": db_user,
             "DB_PASS": db_pass,
             "DB_HOST": db_host,
-            "DB_DATABASE": db_database,
+            #"DB_DATABASE": db_database,
             "OUTPUT_PATH": '/output',
             "SECD": 'PRODUCTION'
         }, gpu, mount_path)
@@ -241,7 +248,11 @@ class HookResource:
             run_meta = self.gitlab_service.get_metadata(f"{repo_path}/secd.yml")
             run_for = run_meta['runfor']
             gpu = run_meta['gpu']
-            db_database = run_meta['db_database'] # TODO: This will specify which database that also exists in keycloak
+            #db_database = run_meta['db_database'] # TODO: This will specify which database that also exists in keycloak
+
+            # Temp keycloak user
+            temp_user_id = "temp_" + keycloak_user_id
+            temp_user_password = "temp_password"
 
             # Check if user has 'mysql_test' role in 'database-service' client and is in 'secd' group
             user_have_permission = False
@@ -250,12 +261,23 @@ class HookResource:
 
             if user_have_permission:
                 log("User has the necessary permissions.")
-                temp_user_id = self.keycloak_service.create_temp_user("temp_" + keycloak_user_id, "temp_password")
+                temp_user_id = self.keycloak_service.create_temp_user(temp_user_id, temp_user_password)
             else:
                 log("User does not have the necessary permissions.")
                 return
 
+
             # TODO: Set the tmp user role to be able to access the database
+            # Get database IP address
+            token_response: Dict[str, str] = self.keycloak_service.get_access_token_username_password(temp_user_id, temp_user_password)
+            token = token_response['access_token']
+            headers = {'Authorization': f'Bearer {token}'}
+            database_host_response = requests.get('http://localhost:8001/v1/database', headers=headers)
+            if database_host_response.status_code != 200:
+                log(f"Failed to get database host: {database_host_response.text}", "ERROR")
+                raise Exception("Failed to get database host")
+            database_host = database_host_response.json()['database_pod_ip']
+            log(f"Database host: {database_host}")
 
             # Get database info
             image_name = self.build_and_push_image(repo_path, run_id)
@@ -272,8 +294,8 @@ class HookResource:
             self.kubernetes_service.create_pod(run_id, image_name, {
                 "DB_USER": get_settings()['db']['mysql']['username'],
                 "DB_PASS": get_settings()['db']['mysql']['password'],
-                "DB_HOST": get_settings()['db']['mysql']['host'],
-                "DB_DATABASE": db_database,
+                "DB_HOST": database_host,
+                #"DB_DATABASE": db_database,
                 "OUTPUT_PATH": '/output',
                 "SECD": 'PRODUCTION'
             }, gpu, mount_path)

@@ -168,3 +168,13 @@ class GitlabService:
             pass
 
         shutil.rmtree(repo_path, ignore_errors=True)
+
+    def validate_event_token(self, req):
+        event = req.get_header('X-Gitlab-Event')
+        if event not in ['Push Hook', 'System Hook']:
+            log(f"Invalid X-Gitlab-Event header: {event}", "ERROR")
+            raise gitlab.GitlabHeadError(error_message='Invalid X-Gitlab-Event header', response_code=400)
+        if req.get_header('X-Gitlab-Token') != get_settings()['gitlab']['secret']:
+            log("Unauthorized access: Invalid token", "ERROR")
+            raise gitlab.GitlabAuthenticationError(error_message='Unauthorized access: Invalid token', response_code=401)
+        return True

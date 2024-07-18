@@ -1,4 +1,3 @@
-import datetime
 import json
 from keycloak import KeycloakAuthenticationError, KeycloakGetError, KeycloakAdmin, KeycloakOpenIDConnection, KeycloakPostError, KeycloakOpenID
 from typing import Dict, List
@@ -87,24 +86,6 @@ class KeycloakService:
             return False
 
         return True
-
-    def authenticate(self, auth_header):
-        token = auth_header.split(' ')[1]
-        try:
-            if not token:
-                raise KeycloakAuthenticationError("Authorization token required")
-
-            token = token.split(' ')[1]
-            log(f"Authenticating token: {token}")
-            userinfo = self.keycloak_openid.userinfo(token)
-            log(f"User info: {userinfo}")
-            if 'error' in userinfo:
-                log(f"User info error: {userinfo['error_description']}", "ERROR")
-                raise KeycloakAuthenticationError(userinfo['error_description'])
-            return userinfo
-        except KeycloakAuthenticationError as e:
-            log(f"User authentication error: {str(e)}", "ERROR")
-            raise KeycloakAuthenticationError("Invalid authorization token")
 
     def validate(self, auth_header):
             log(f"auth_header: {auth_header}")

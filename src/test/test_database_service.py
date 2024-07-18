@@ -10,9 +10,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '.
 from secure.src.services.keycloak_service import KeycloakService
 from secure.src.util.setup import get_settings
 
-#BASE_URL = 'https://gitlab.secd/v1/database'
 BASE_URL = 'http://localhost:8001/v1/database'
-#KEYCLOAK_URL = "https://iam.secd/realms/cloud/protocol/openid-connect/token"
 KEYCLOAK_URL = "https://iam.secd/realms/cloud/protocol/openid-connect/token"
 CLIENT_ID = get_settings()['keycloak']['database-service']['client_id']
 CLIENT_SECRET = get_settings()['keycloak']['database-service']['client_secret']
@@ -60,12 +58,11 @@ def test_get_database_incorrect_auth():
 
 def test_get_database_correct_auth():
     keycloak_service = KeycloakService()
-    token_response: Dict[str, Any] = keycloak_service.get_access_token_username_password(USERNAME, PASSWORD)
+    token_response: Dict[str, str] = keycloak_service.get_access_token_username_password(USERNAME, PASSWORD)
     token = token_response['access_token']
     headers = {'Authorization': f'Bearer {token}'}
 
     print(f'headers: {headers}')
-
     response = requests.get(BASE_URL, headers=headers)
     print("Database service response status code:", response.status_code)
     print("Database service response headers:", response.headers)

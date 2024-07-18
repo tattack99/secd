@@ -39,7 +39,8 @@ class Server:
 
         self.database_resource = DatabaseResource(
             database_service=self.database_service,
-            keycloak_service=self.keycloak_service)
+            keycloak_service=self.keycloak_service,
+            kubernetes_service=self.kubernetes_service)
 
         self.keycloak_resource = KeycloakResource(
             keycloak_service=self.keycloak_service)
@@ -53,18 +54,15 @@ class Server:
         self.create_keycloak_app()
 
     def create_hook_app(self):
-        self.hook_app = falcon.App()
-        #self.hook_app.add_middleware(self.keycloak_auth_middleware)
-        self.hook_app.add_route('/v1/hook', self.hook_resource)
+            self.hook_app = falcon.App()
+            self.hook_app.add_route('/v1/hook', self.hook_resource)
 
     def create_database_app(self):
         self.database_app = falcon.App()
-        #self.database_app.add_middleware(self.keycloak_auth_middleware)
         self.database_app.add_route('/v1/database', self.database_resource)
 
     def create_keycloak_app(self):
         self.keycloak_app = falcon.App()
-        #self.keycloak_app.add_middleware(self.keycloak_auth_middleware)
         self.keycloak_app.add_route('/v1/keycloak', self.keycloak_resource)
 
     def serve_app(self, app, port):
@@ -92,14 +90,7 @@ class Server:
             database_thread.start()
             keycloak_thread.start()
 
-            # main thread hook resource
-            with make_server('', 8080, self.hook_app) as httpd:
-                log('Serving on port 8080...')
-                httpd.serve_forever()
-
-
+            self.serve_app(self.hook_app,8080) # Must be port 8080
 
         except Exception as e:
             log(f"Error starting Daemon thread: {e}", "ERROR")
-
-

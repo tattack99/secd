@@ -56,10 +56,3 @@ class DockerService:
         for image in client.images.list():
             if image.tags == None:
                 client.images.remove(image.id)
-
-
-"""
-def _with_docker():
-    client = docker.from_env()
-    return client
-"""
