@@ -16,6 +16,14 @@ class DockerService:
             log(f"Error building image {image_name}: {str(e)}", "ERROR")
             raise Exception(f"Error building image {image_name}: {e}")
 
+    def build_and_push_image(self, repo_path, run_id):
+        reg_settings = get_settings()['registry']
+        image_name = f"{reg_settings['url']}/{reg_settings['project']}/{run_id}"
+        log(f"image name: {image_name}")
+        self.build_image(repo_path, image_name)
+        self.push_and_remove_image(image_name)
+        log(f"Image {image_name} built and pushed")
+        return image_name
 
     def push_and_remove_image(self, image_name):
         log(f"Pushing image {image_name}")

@@ -13,7 +13,6 @@ from secure.src.services.kubernetes_service import KubernetesService
 from secure.src.services.mysql_service import MySQLService
 from secure.src.util.logger import log
 from secure.src.util.daemon import Daemon
-from secure.src.middleware.keycloak_auth_middleware import KeycloakAuthMiddleware
 
 class Server:
     def __init__(self):
@@ -44,9 +43,6 @@ class Server:
 
         self.keycloak_resource = KeycloakResource(
             keycloak_service=self.keycloak_service)
-
-        # Instantiate middleware
-        self.keycloak_auth_middleware = KeycloakAuthMiddleware(keycloak_service=self.keycloak_service)
 
         # Create multiple apps
         self.create_hook_app()

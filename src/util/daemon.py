@@ -1,6 +1,4 @@
 import time
-import secure.src.services.kubernetes_service as kubernetes_service
-import secure.src.services.gitlab_service as gitlab_service
 
 from secure.src.services.database_service import DatabaseService
 from secure.src.services.kubernetes_service import KubernetesService
@@ -14,7 +12,7 @@ class Daemon:
             kubernetes_service : KubernetesService,
             gitlab_service : GitlabService,
             database_service : DatabaseService):
-        
+
         self.kubernetes_service = kubernetes_service
         self.gitlab_service = gitlab_service
         self.database_service = database_service

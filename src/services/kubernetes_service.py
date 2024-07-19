@@ -1,4 +1,5 @@
 import datetime
+import os
 from kubernetes import client, config
 from typing import Dict, List
 
@@ -23,6 +24,25 @@ class KubernetesService:
             if pod_name_prefix in pod.metadata.name:
                 return pod.status.pod_ip
         return None
+
+    def handle_cache_dir(self, run_meta, keycloak_user_id, run_id):
+        cache_dir = mount_path = None
+        if "cache_dir" in run_meta and run_meta["cache_dir"]:
+            mount_path = run_meta.get('mount_path', '/cache')
+            log(f"Found custom mount_path: {mount_path}" if 'mount_path' in run_meta else "Using default mount_path: /cache")
+
+            cache_dir = run_meta['cache_dir']
+            cache_path = f"{get_settings()['path']['cachePath']}/{keycloak_user_id}/{cache_dir}"
+            log(f"Found cache_dir: {cache_path}")
+
+            if not os.path.exists(cache_path):
+                os.makedirs(cache_path)
+                log(f"Cache directory created at: {cache_path}")
+
+            pvc_repo_path = get_settings()['k8s']['pvcPath']
+            self.create_persistent_volume(run_id, f'{pvc_repo_path}/cache/{keycloak_user_id}/{cache_dir}', "cache")
+            log(f"Cache PVC created for {run_id}")
+        return cache_dir, mount_path
 
     def create_namespace(self, user_id: str, run_id: str, run_for: datetime):
         v1 = self.v1

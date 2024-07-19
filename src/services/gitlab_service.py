@@ -171,6 +171,7 @@ class GitlabService:
 
     def validate_event_token(self, req):
         event = req.get_header('X-Gitlab-Event')
+        log(f"Received event: {event}")
         if event not in ['Push Hook', 'System Hook']:
             log(f"Invalid X-Gitlab-Event header: {event}", "ERROR")
             raise gitlab.GitlabHeadError(error_message='Invalid X-Gitlab-Event header', response_code=400)
@@ -178,3 +179,68 @@ class GitlabService:
             log("Unauthorized access: Invalid token", "ERROR")
             raise gitlab.GitlabAuthenticationError(error_message='Unauthorized access: Invalid token', response_code=401)
         return True
+
+    def validate_body_schema(self, body):
+        schema = {
+        'event_name': {'type': 'string'},
+        'ref': {'type': 'string'},
+        'user_id': {'type': 'integer'},
+        'project_id': {'type': 'integer'},
+        'project': {
+            'type': 'dict',
+            'schema': {
+                'http_url': {'type': 'string'},
+            }
+        },
+        'commits': {
+            'type': 'list',
+            'schema': {
+                'type': 'dict',
+                'schema': {
+                    'id': {'type': 'string'},
+                }
+            }
+        }
+        }
+        v = Validator(schema)
+        v.allow_unknown = True
+        if not v.validate(body):
+            log(f"Invalid body: {v.errors}", "ERROR")
+            raise gitlab.GitlabError(error_message=f'Invalid body: {v.errors}')
+
+    def validate_event_name(self, body):
+        if body['event_name'] != 'push':
+            log(f"Invalid event_name: {body['event_name']}", "ERROR")
+            raise gitlab.GitlabError(error_message=f'Invalid event_name: {body["event_name"]}')
+
+    def validate_commit_branch(self, body):
+        if body['ref'] != 'refs/heads/main':
+            log(f"Commit is not from main branch: {body['ref']}", "ERROR")
+            raise gitlab.GitlabError(error_message=f'Commit is not from main branch: {body["ref"]}')
+
+    def validate_commits_signature(self, body):
+        log(f"Found {len(body['commits'])} commits - {body['project']['path_with_namespace']}")
+        for push_commit in body['commits']:
+            signature = self.get_signature(body['project_id'], push_commit['id'])
+            if signature is None:
+                log(f"No signature found for commit {push_commit['id']}", "ERROR")
+                raise gitlab.GitlabError(error_message=f'No signature found for commit {push_commit["id"]}')
+
+            if signature['verification_status'] != 'verified':
+                log(f"Found signature, but it is not verified: {signature['verification_status']}", "ERROR")
+                raise gitlab.GitlabError(error_message=f'Signature not verified for commit {push_commit["id"]}')
+
+        log(f"All {len(body['commits'])} commits have a verified signature")
+
+    def validate_dockerfile_presence(self, body):
+        if not self.has_file_in_repo(body['project_id'], 'Dockerfile', body['ref']):
+            log(f"No Dockerfile found in project {body['project_id']}", "ERROR")
+            raise gitlab.GitlabError(error_message=f'No Dockerfile found in project {body["project_id"]}')
+
+    def validate_body(self, body):
+        log(f"Request body: {body}")
+        self.validate_body_schema(body)
+        self.validate_event_name(body)
+        self.validate_commit_branch(body)
+        self.validate_commits_signature(body)
+        self.validate_dockerfile_presence(body)

@@ -25,7 +25,11 @@ class DatabaseResource:
             if not self.keycloak_service.validate(auth_header=auth_header):
                 raise HTTPUnauthorized(description="Could not validate header")
 
-            pod_ip = self.kubernetes_service.get_pod_ip_in_namespace("storage", "mysql")
+            database_header = req.get_header('Database')
+            if not database_header:
+                raise HTTPNotFound(description="Header does not contain database")
+
+            pod_ip = self.kubernetes_service.get_pod_ip_in_namespace("storage", database_header)
 
             if pod_ip is None:
                 raise HTTPNotFound(description="Database pod not found")
