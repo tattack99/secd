@@ -25,7 +25,7 @@ class Server:
         self.docker_service = DockerService()
         self.kubernetes_service = KubernetesService()
         self.gitlab_service = GitlabService()
-        self.mysql_service = MySQLService()
+        # self.mysql_service = MySQLService()
 
         # Instantiate resources
         self.hook_resource = HookResource(
@@ -34,7 +34,8 @@ class Server:
             gitlab_service=self.gitlab_service,
             kubernetes_service=self.kubernetes_service,
             docker_service=self.docker_service,
-            mysql_service=self.mysql_service)
+            #mysql_service=self.mysql_service
+            )
 
         self.database_resource = DatabaseResource(
             database_service=self.database_service,

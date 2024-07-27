@@ -1,3 +1,4 @@
+import base64
 import datetime
 import os
 from kubernetes import client, config
@@ -11,6 +12,30 @@ class KubernetesService:
         self.config_path = get_settings()['k8s']['configPath']
         config.load_kube_config(self.config_path)
         self.v1 = client.CoreV1Api()
+
+    def get_secret(self, namespace, secret_name, key):
+        log(f"Fetching secret {secret_name} in namespace {namespace}")
+        v1 = self.v1
+
+        # Fetch the secret
+        secret = v1.read_namespaced_secret(secret_name, namespace)
+
+        # Decode the secret value
+        secret_value = secret.data[key]
+
+        return base64.b64decode(secret_value).decode('utf-8')
+
+    def get_pod_details(self, namespace: str, pod_name: str):
+        log(f"Fetching pod '{pod_name}' in namespace '{namespace}'")
+        try:
+            pod = self.v1.read_namespaced_pod(pod_name, namespace)
+            log(f"Pod '{pod_name}' fetched successfully.")
+            return pod
+        except client.exceptions.ApiException as e:
+            error_message = f"Exception when calling CoreV1Api->read_namespaced_pod: {str(e)}"
+            log(error_message)
+            raise RuntimeError(error_message)
+
 
     def get_pod_in_namespace(self, namespace: str) -> List[str]:
         v1 = self.v1
@@ -26,6 +51,7 @@ class KubernetesService:
         return None
 
     def handle_cache_dir(self, run_meta, keycloak_user_id, run_id):
+        log(f"Handling cache directory for run: {run_id}")
         cache_dir = mount_path = None
         if "cache_dir" in run_meta and run_meta["cache_dir"]:
             mount_path = run_meta.get('mount_path', '/cache')

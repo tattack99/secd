@@ -22,7 +22,7 @@ class HookResource:
             self,
             gitlab_service : GitlabService,
             keycloak_service : KeycloakService,
-            mysql_service : MySQLService,
+            #mysql_service : MySQLService,
             docker_service : DockerService,
             kubernetes_service : KubernetesService,
             database_service : DatabaseService
@@ -30,7 +30,7 @@ class HookResource:
 
         self.gitlab_service = gitlab_service
         self.keycloak_service = keycloak_service
-        self.mysql_service = mysql_service
+        #self.mysql_service = mysql_service
         self.docker_service = docker_service
         self.kubernetes_service = kubernetes_service
         self.database_service = database_service
@@ -156,10 +156,21 @@ class HookResource:
 
             # Creating pod
             cache_dir, mount_path = self.kubernetes_service.handle_cache_dir(run_meta, keycloak_user_id, run_id)
+            db_pod_name = run_meta['database']
+            log(f"Database pod name: {db_pod_name}")
+            db_pod = self.kubernetes_service.get_pod_details("storage", db_pod_name)
+            log(f"Database pod found: {db_pod.metadata.name}")
+
+            # Use the release name to construct the secret name
+            release_name = db_pod.metadata.labels['release']
+            secret_name = f"secret-{release_name}"
+            log(f"Constructed secret name: {secret_name}")
+
+            db_password = self.kubernetes_service.get_secret(namespace="storage", secret_name=secret_name, key="mysql-root-password")
 
             self.kubernetes_service.create_pod(run_id, image_name, {
-                "DB_USER": get_settings()['db']['mysql']['username'],
-                "DB_PASS": get_settings()['db']['mysql']['password'],
+                "DB_USER": "root",
+                "DB_PASS": db_password,
                 "DB_HOST": database_host,
                 "OUTPUT_PATH": '/output',
                 "SECD": 'PRODUCTION'
