@@ -12,28 +12,21 @@ from src.util.logger import log
 from src.util.setup import get_settings
 from src.services.gitlab_service import GitlabService
 from src.services.keycloak_service import KeycloakService
-from src.services.mysql_service import MySQLService
 from src.services.docker_service import DockerService
 from src.services.kubernetes_service import KubernetesService
-from src.services.database_service import DatabaseService
 
 class HookResource:
     def __init__(
             self,
             gitlab_service : GitlabService,
             keycloak_service : KeycloakService,
-            #mysql_service : MySQLService,
             docker_service : DockerService,
-            kubernetes_service : KubernetesService,
-            database_service : DatabaseService
-            ):
+            kubernetes_service : KubernetesService):
 
         self.gitlab_service = gitlab_service
         self.keycloak_service = keycloak_service
-        #self.mysql_service = mysql_service
         self.docker_service = docker_service
         self.kubernetes_service = kubernetes_service
-        self.database_service = database_service
 
     def on_post(self, req, resp):
         log("Starting hook process...")
@@ -166,7 +159,7 @@ class HookResource:
             secret_name = f"secret-{release_name}"
             log(f"Constructed secret name: {secret_name}")
 
-            db_password = self.kubernetes_service.get_secret(namespace="storage", secret_name=secret_name, key="mysql-root-password")
+            db_password = self.kubernetes_service.get_secret(namespace="storage", secret_name=secret_name, key="root-password")
 
             self.kubernetes_service.create_pod(run_id, image_name, {
                 "DB_USER": "root",

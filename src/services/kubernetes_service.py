@@ -17,10 +17,7 @@ class KubernetesService:
         log(f"Fetching secret {secret_name} in namespace {namespace}")
         v1 = self.v1
 
-        # Fetch the secret
         secret = v1.read_namespaced_secret(secret_name, namespace)
-
-        # Decode the secret value
         secret_value = secret.data[key]
 
         return base64.b64decode(secret_value).decode('utf-8')
@@ -35,7 +32,6 @@ class KubernetesService:
             error_message = f"Exception when calling CoreV1Api->read_namespaced_pod: {str(e)}"
             log(error_message)
             raise RuntimeError(error_message)
-
 
     def get_pod_in_namespace(self, namespace: str) -> List[str]:
         v1 = self.v1

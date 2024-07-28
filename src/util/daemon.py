@@ -1,6 +1,5 @@
 import time
 
-from secure.src.services.database_service import DatabaseService
 from secure.src.services.kubernetes_service import KubernetesService
 from secure.src.services.gitlab_service import GitlabService
 
@@ -10,12 +9,10 @@ class Daemon:
     def __init__(
             self,
             kubernetes_service : KubernetesService,
-            gitlab_service : GitlabService,
-            database_service : DatabaseService):
+            gitlab_service : GitlabService):
 
         self.kubernetes_service = kubernetes_service
         self.gitlab_service = gitlab_service
-        self.database_service = database_service
 
 
     def start_microk8s_cleanup(self):
@@ -32,10 +29,3 @@ class Daemon:
                 log(f"Error in Daemon run loop: {e}", "ERROR")
 
             time.sleep(5)
-
-    def start_database_service(self):
-        log("Starting database service...")
-        try:
-            print("start_database_service")
-        except Exception as e:
-            log(f"Error in database manage loop: {e}", "ERROR")

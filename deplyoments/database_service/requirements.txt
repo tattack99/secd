@@ -1,3 +1,0 @@
-falcon
-gunicorn
-python-keycloak

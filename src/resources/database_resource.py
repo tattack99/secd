@@ -1,5 +1,4 @@
 from keycloak import KeycloakAuthenticationError
-from src.services.database_service import DatabaseService
 from src.services.keycloak_service import KeycloakService
 from src.services.kubernetes_service import KubernetesService
 from src.util.logger import log
@@ -9,12 +8,10 @@ import falcon
 class DatabaseResource:
     def __init__(
             self,
-            database_service : DatabaseService,
             keycloak_service : KeycloakService,
             kubernetes_service : KubernetesService,
             ):
 
-        self.database_service = database_service
         self.keycloak_service = keycloak_service
         self.kubernetes_service = kubernetes_service
 
