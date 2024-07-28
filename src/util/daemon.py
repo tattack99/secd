@@ -1,7 +1,7 @@
 import time
 
-from secure.src.services.kubernetes_service import KubernetesService
-from secure.src.services.gitlab_service import GitlabService
+from secure.src.services.core.kubernetes_service import KubernetesService
+from secure.src.services.core.gitlab_service import GitlabService
 
 from secure.src.util.logger import log
 

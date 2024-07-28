@@ -1,6 +1,6 @@
 import sys
 import os
-from secure.src.services.keycloak_service import KeycloakService
+from secure.src.services.core.keycloak_service import KeycloakService
 from secure.src.util.logger import log
 
 os.environ['CONFIG_FILE'] = '/home/cloud/secd/config/config.yml'

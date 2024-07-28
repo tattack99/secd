@@ -7,7 +7,7 @@ import requests
 os.environ['CONFIG_FILE'] = '/home/cloud/secd/config/config.yml'
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
 
-from secure.src.services.keycloak_service import KeycloakService
+from secure.src.services.core.keycloak_service import KeycloakService
 from secure.src.util.setup import get_settings
 
 BASE_URL = 'http://localhost:8001/v1/database'

@@ -38,13 +38,12 @@ class KubernetesService:
         pods = v1.list_namespaced_pod(namespace)
         return [pod.metadata.name for pod in pods.items]
 
-    def get_pod_ip_in_namespace(self, namespace, pod_name_prefix):
-        v1 = self.v1
-        pods = v1.list_namespaced_pod(namespace)
+    def get_pod_ip_in_namespace(self, namespace, pod_name_prefix) -> str:
+        pods = self.v1.list_namespaced_pod(namespace)
         for pod in pods.items:
             if pod_name_prefix in pod.metadata.name:
                 return pod.status.pod_ip
-        return None
+        return ""
 
     def handle_cache_dir(self, run_meta, keycloak_user_id, run_id):
         log(f"Handling cache directory for run: {run_id}")

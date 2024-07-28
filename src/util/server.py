@@ -2,50 +2,56 @@ import falcon
 import threading
 from wsgiref.simple_server import make_server
 from secure.src.util.setup import load_settings
-from secure.src.resources.database_resource import DatabaseResource
-from secure.src.resources.keycloak_resource import KeycloakResource
-from secure.src.resources.hook_resource import HookResource
-from secure.src.services.docker_service import DockerService
-from secure.src.services.gitlab_service import GitlabService
-from secure.src.services.keycloak_service import KeycloakService
-from secure.src.services.kubernetes_service import KubernetesService
 from secure.src.util.logger import log
+from secure.src.resources.database_resource import DatabaseResource
+from secure.src.resources.hook_resource import HookResource
+from secure.src.services.core.docker_service import DockerService
+from secure.src.services.core.gitlab_service import GitlabService
+from secure.src.services.core.keycloak_service import KeycloakService
+from secure.src.services.core.kubernetes_service import KubernetesService
 from secure.src.util.daemon import Daemon
+from src.services.resource.database_service import DatabaseService
+from src.services.resource.hook_service import HookService
 
 class Server:
     def __init__(self):
         log("Starting server...")
         load_settings()
 
-        # Instantiate services
+        self.apps = []
+        self.threads = []
+
+        # Instantiate core services
         self.keycloak_service = KeycloakService()
         self.docker_service = DockerService()
         self.kubernetes_service = KubernetesService()
         self.gitlab_service = GitlabService()
-        self.apps = []
-        self.threads = []
 
-        # Instantiate resources
-        self.hook_resource = HookResource(
+        # Instantiate resources services
+        self.hook_service = HookService(
             keycloak_service=self.keycloak_service,
             gitlab_service=self.gitlab_service,
             kubernetes_service=self.kubernetes_service,
             docker_service=self.docker_service,
         )
 
-        self.database_resource = DatabaseResource(
+        self.database_service = DatabaseService(
             keycloak_service=self.keycloak_service,
             kubernetes_service=self.kubernetes_service
         )
 
-        self.keycloak_resource = KeycloakResource(
-            keycloak_service=self.keycloak_service
+        # Instantiate resources
+        self.hook_resource = HookResource(
+            hook_service=self.hook_service
+        )
+
+        self.database_resource = DatabaseResource(
+            database_service=self.database_service,
         )
 
         # Create multiple apps
         self.create_app('/v1/hook', self.hook_resource, 8080)
         self.create_app('/v1/database', self.database_resource, 8001)
-        self.create_app('/v1/keycloak', self.keycloak_resource, 8002)
 
     def create_app(self, path, resource, port):
         app = falcon.App()
@@ -59,7 +65,7 @@ class Server:
 
     def run(self):
         try:
-            # Extract these Daemon to standalone microservices
+            # TODO: Extract these Daemon to standalone microservices
             log("Creating Daemon microk8s_cleanup...")
             microk8s_cleanup = Daemon(self.kubernetes_service, self.gitlab_service)
             microk8s_cleanup_thread = threading.Thread(target=microk8s_cleanup.start_microk8s_cleanup)
