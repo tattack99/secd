@@ -99,24 +99,30 @@ class KubernetesService:
             log(f"Cache PVC created for {run_id}")
         return cache_dir, mount_path
 
-    def create_namespace(self, user_id: str, run_id: str, run_for: datetime):
+    def create_namespace(self, user_id: str, run_id: str, run_for: int):
         v1 = self.v1
         run_until = datetime.datetime.now() + datetime.timedelta(hours=run_for)
         namespace_name = f"secd-{run_id}"
 
         log(f"Creating namespace: {namespace_name} for user: {user_id} until: {run_until}")
 
-        namespace = client.V1Namespace()
-        namespace.metadata = client.V1ObjectMeta(
-            name=namespace_name,
-            annotations={
-                "userid": user_id,
-                "rununtil": run_until.isoformat(),
-            }
+        # Define the namespace object with labels
+        namespace = client.V1Namespace(
+            metadata=client.V1ObjectMeta(
+                name=namespace_name,
+                labels={
+                    "access": "database-access"  # Label for network policy
+                },
+                annotations={
+                    "userid": user_id,
+                    "rununtil": run_until.isoformat(),
+                }
+            )
         )
-        v1.create_namespace(body=namespace)
-        log(f"Namespace {namespace_name} created")
 
+        # Create the namespace in the cluster
+        v1.create_namespace(body=namespace)
+        log(f"Namespace {namespace_name} created with label 'access=database-access'")
 
 
     def _create_volume(self, volume_name: str, claim_name: str) -> client.V1Volume:
@@ -203,12 +209,14 @@ class KubernetesService:
         return resources, labels
 
 
-    def create_pod_v1(self, run_id: str, image: str, envs: Dict[str, str], gpu: str = "", mount_path: Optional[str] = None, database_volume: Optional[client.V1Volume] = None, database_mount: Optional[client.V1VolumeMount] = None) -> None:
+    def create_pod_v1(self, run_id: str, image: str, envs: Dict[str, str], gpu: str = "", mount_path: Optional[str] = None, database: str = "") -> None:
         try:
             pod_name: str = f"secd-{run_id}"
             k8s_envs: List[client.V1EnvVar] = [client.V1EnvVar(name=key, value=value) for key, value in envs.items()]
             resources: client.V1ResourceRequirements = client.V1ResourceRequirements()
-            labels: Dict[str, str] = {}
+            labels: Dict[str, str] = {
+                "access": f"{database}"  # Ensure the label matches the network policy
+            }
             volumes: List[client.V1Volume] = []
             volume_mounts: List[client.V1VolumeMount] = []
 
@@ -222,12 +230,10 @@ class KubernetesService:
                 volumes.append(self._create_volume(f'vol-{run_id}-cache', f'secd-pvc-{run_id}-cache'))
                 volume_mounts.append(self._create_mount(f'vol-{run_id}-cache', mount_path))
 
-            if database_volume and database_mount:
-                volumes.append(database_volume)
-                volume_mounts.append(database_mount)
 
             if gpu:
-                resources, labels = self._set_resources(gpu=1)
+                resources, gpu_labels = self._set_resources(gpu=1)
+                labels.update(gpu_labels)
 
             containers = [self._create_container(pod_name, image, k8s_envs, volume_mounts, resources)]
 

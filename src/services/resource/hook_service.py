@@ -96,6 +96,9 @@ class HookService:
             db_pod_name = run_meta['database']
             log(f"Database pod name: {db_pod_name}")
             db_pod = self.kubernetes_service.get_pod_by_name("storage", db_pod_name) # TODO: Make function get_pod_by_release_name
+            db_label = db_pod.metadata.labels.get('database', '')  # Access the 'database' label
+
+            log(f"Database label: {db_label}")
 
             log(f"Database pod found: {db_pod.metadata.name}")
 
@@ -105,8 +108,9 @@ class HookService:
             log(f"Constructed secret name: {secret_name}")
 
             # TODO: generate username and password in helm chart instead of setting it
-            db_user = self.kubernetes_service.get_secret(namespace="storage", secret_name=secret_name, key="user")# TODO: user-password
-            db_password = self.kubernetes_service.get_secret(namespace="storage", secret_name=secret_name, key="user-password")# TODO: user-password
+            db_user = self.kubernetes_service.get_secret(namespace="storage", secret_name=secret_name, key="user")
+            db_password = self.kubernetes_service.get_secret(namespace="storage", secret_name=secret_name, key="user-password")
+
 
             env_vars = {
                 "DB_USER": db_user,
@@ -131,6 +135,7 @@ class HookService:
                 envs=env_vars,
                 gpu=gpu,
                 mount_path=mount_path,
+                database = db_label,
                 #database_volume=database_volume,
                 #database_mount=database_mount
             )
