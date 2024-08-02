@@ -28,6 +28,7 @@ class HookService:
     def create(self, body):
         try:
             log("Starting create process...")
+            user_have_permission = False
             self.gitlab_service.validate_body(body)
 
             # Get user info
@@ -56,7 +57,6 @@ class HookService:
             temp_user_password = "temp_password"
 
             # Check if user has 'mysql_test' role in 'database-service' client and is in 'secd' group
-            user_have_permission = False
             if self.keycloak_service.check_user_has_role(keycloak_user_id, "database-service", "mysql_test") and self.keycloak_service.check_user_in_group(keycloak_user_id, "secd"):
                 user_have_permission = True
 
@@ -79,8 +79,8 @@ class HookService:
             if database_host_response.status_code != 200:
                 log(f"Failed to get database host: {database_host_response.text}", "ERROR")
                 raise Exception("Failed to get database host")
+            log(f"Database host response: {database_host_response.text}")
             database_host = database_host_response.json()['database_pod_ip']
-            log(f"Database host: {database_host}")
 
             # Get database info
             image_name = self.docker_service.build_and_push_image(repo_path, run_id)
@@ -95,7 +95,8 @@ class HookService:
             cache_dir, mount_path = self.kubernetes_service.handle_cache_dir(run_meta, keycloak_user_id, run_id)
             db_pod_name = run_meta['database']
             log(f"Database pod name: {db_pod_name}")
-            db_pod = self.kubernetes_service.get_pod_details("storage", db_pod_name)
+            db_pod = self.kubernetes_service.get_pod_by_name("storage", db_pod_name) # TODO: Make function get_pod_by_release_name
+
             log(f"Database pod found: {db_pod.metadata.name}")
 
             # Use the release name to construct the secret name
@@ -103,21 +104,41 @@ class HookService:
             secret_name = f"secret-{release_name}"
             log(f"Constructed secret name: {secret_name}")
 
-            db_password = self.kubernetes_service.get_secret(namespace="storage", secret_name=secret_name, key="root-password")
+            # TODO: generate username and password in helm chart instead of setting it
+            db_user = self.kubernetes_service.get_secret(namespace="storage", secret_name=secret_name, key="user")# TODO: user-password
+            db_password = self.kubernetes_service.get_secret(namespace="storage", secret_name=secret_name, key="user-password")# TODO: user-password
 
-            self.kubernetes_service.create_pod(run_id, image_name, {
-                "DB_USER": "root",
+            env_vars = {
+                "DB_USER": db_user,
                 "DB_PASS": db_password,
                 "DB_HOST": database_host,
                 "OUTPUT_PATH": '/output',
                 "SECD": 'PRODUCTION'
-            }, gpu, mount_path)
+            }
+
+            if db_pod.spec.volumes and db_pod.spec.containers[0].volume_mounts:
+                database_volume = db_pod.spec.volumes[0]
+                database_mount = db_pod.spec.containers[0].volume_mounts[0]
+            else:
+                database_volume = None
+                database_mount = None
+            log(f"database_volume: {database_volume}")
+            log(f"database_mount: {database_mount}")
+
+            self.kubernetes_service.create_pod_v1(
+                run_id=run_id,
+                image=image_name,
+                envs=env_vars,
+                gpu=gpu,
+                mount_path=mount_path,
+                #database_volume=database_volume,
+                #database_mount=database_mount
+            )
             log(f"Pod created for {run_id}")
 
         except Exception as e:
             log(f"Error in create process: {str(e)}", "ERROR")
-        else:
-            log(f"Successfully launched {run_id}")
+
         finally:
             if(user_have_permission):
                 self.keycloak_service.delete_temp_user(temp_user_id)

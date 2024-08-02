@@ -76,7 +76,7 @@ class DockerService:
             raise Exception(f"Docker API error while removing image {image_name}: {e}")
         except Exception as e:
             log(f"Unexpected error removing image {image_name}: {str(e)}", "ERROR")
-            pass
+            raise Exception(f"Unexpected error removing image {image_name}: {e}")
 
     def remove_dangling(self):
         try:

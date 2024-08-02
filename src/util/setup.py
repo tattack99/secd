@@ -4,7 +4,6 @@ from cerberus import Validator
 from dotenv import load_dotenv
 from secure.src.util.logger import log
 
-# Load environment variables from .env file if it exists
 load_dotenv()
 settings = {}
 
