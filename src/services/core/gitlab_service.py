@@ -272,14 +272,11 @@ class GitlabService:
             raise gitlab.GitlabError(error_message=f'No Dockerfile found in project {body["project_id"]}')
 
     def validate_body(self, body):
-        log(f"Request body: {body}")
-        self.validate_body_schema(body)
-        log("Body schema validated")
-        self.validate_event_name(body)
-        log("Event name validated")
-        self.validate_commit_branch(body)
-        log("Commit branch validated")
-        self.validate_commits_signature(body)
-        log("Commits signature validated")
-        self.validate_dockerfile_presence(body)
-        log("Dockerfile presence validated")
+        try:
+            self.validate_body_schema(body)
+            self.validate_event_name(body)
+            self.validate_commit_branch(body)
+            self.validate_commits_signature(body)
+            self.validate_dockerfile_presence(body)
+        except gitlab.GitlabError as e:
+            raise

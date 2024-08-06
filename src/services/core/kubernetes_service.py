@@ -55,7 +55,7 @@ class KubernetesService:
                     return pv.spec.nfs.path
         return "None"
 
-    def get_pod_by_release_name(self, release_name: str, namespace: str) -> client.V1Pod:
+    def get_pod_by_helm_release(self, release_name: str, namespace: str):
         try:
             log(f"Searching for pod with Helm release name '{release_name}' in namespace '{namespace}'.")
 

@@ -16,7 +16,7 @@ class HookResource:
         try:
             self.validate_event_token(req)
             body = self.parse_request_body(req)
-            threading.Thread(target=self.hook_service.create(body)).start()
+            threading.Thread(target=self.hook_service.create_v2(body)).start()
             self.set_response(resp, falcon.HTTP_200, "success")
         except json.JSONDecodeError as e:
             self.handle_error(resp, falcon.HTTP_400, "Invalid body", e)
