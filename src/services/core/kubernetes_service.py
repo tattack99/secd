@@ -12,6 +12,7 @@ class KubernetesService:
         self.config_path = get_settings()['k8s']['configPath']
         config.load_kube_config(self.config_path)
         self.v1 = client.CoreV1Api()
+        self.apps_v1 = client.AppsV1Api()
 
     def get_secret(self, namespace, secret_name, key):
         log(f"Fetching secret {secret_name} in namespace {namespace}")
@@ -53,6 +54,66 @@ class KubernetesService:
                 if pv.spec.nfs:
                     return pv.spec.nfs.path
         return "None"
+
+    def get_pod_by_release_name(self, release_name: str, namespace: str) -> client.V1Pod:
+        try:
+            log(f"Searching for pod with Helm release name '{release_name}' in namespace '{namespace}'.")
+
+            # List all pods in the specified namespace
+            pods = self.v1.list_namespaced_pod(namespace=namespace)
+            log(f"Found {len(pods.items)} pods in namespace '{namespace}'.")
+
+            for pod in pods.items:
+                # Access the labels dictionary
+                labels = pod.metadata.labels or {}
+                log(f"Pod '{pod.metadata.name}' has labels: {labels}")
+
+                # Check if the pod has a label indicating it's part of the release
+                release_label = labels.get('release')  # Safely access the 'release' label
+
+                if release_label == release_name:
+                    pod_name = pod.metadata.name
+                    log(f"Pod '{pod_name}' matches Helm release '{release_name}'.")
+                    return pod
+
+            log(f"No pod found for Helm release '{release_name}' in namespace '{namespace}'.", "WARNING")
+            return None  # Return None if no matching pod is found
+
+        except ApiException as e:
+            log(f"Failed to get pod for Helm release '{release_name}' in namespace '{namespace}': {e}", "ERROR")
+            raise Exception(f"Failed to get pod for Helm release '{release_name}' in namespace '{namespace}': {e}")
+
+    def get_service_by_helm_release(self, release_name: str, namespace: str):
+        try:
+            log(f"Searching for service with Helm release name '{release_name}' in namespace '{namespace}'.")
+
+            # List all services in the specified namespace
+            services = self.v1.list_namespaced_service(namespace=namespace)
+            log(f"Found {len(services.items)} services in namespace '{namespace}'.")
+
+            for service in services.items:
+                # Access the labels dictionary
+                labels = service.metadata.labels or {}
+                log(f"Service '{service.metadata.name}' has labels: {labels}")
+
+                # Check if the service has a label indicating it's part of the release
+                release_label = labels.get('release')  # Safely access the 'release' label
+
+                if release_label == release_name:
+                    service_name = service.metadata.name
+                    log(f"Service '{service_name}' matches Helm release '{release_name}'.")
+
+                    # Construct the FQDN for the service
+                    service_fqdn = f"{service_name}.{namespace}.svc.cluster.local"
+                    return service_fqdn
+
+            log(f"No service found for Helm release '{release_name}' in namespace '{namespace}'.", "WARNING")
+            return None  # Return None if no matching service is found
+
+        except ApiException as e:
+            log(f"Failed to get service for Helm release '{release_name}' in namespace '{namespace}': {e}", "ERROR")
+            raise Exception(f"Failed to get service for Helm release '{release_name}' in namespace '{namespace}': {e}")
+
 
 
     def get_pod_by_name(self, namespace: str, pod_name: str):

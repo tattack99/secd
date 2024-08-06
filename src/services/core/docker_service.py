@@ -24,9 +24,9 @@ class DockerService:
             raise Exception(f"Unexpected error building image {image_name}: {e}")
 
     def build_and_push_image(self, repo_path, run_id):
-        image_name = self.generate_image_name(run_id)
-        log(f"Image name: {image_name}")
         try:
+            image_name = self.generate_image_name(run_id)
+            log(f"Image name: {image_name}")
             self.build_image(repo_path, image_name)
             self.push_and_remove_image(image_name)
             log(f"Image {image_name} built and pushed")

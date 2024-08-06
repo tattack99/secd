@@ -28,10 +28,9 @@ class HookService:
     def create(self, body):
         try:
             log("Starting create process...")
+            # Get user info
             user_have_permission = False
             self.gitlab_service.validate_body(body)
-
-            # Get user info
             gitlab_user_id = body['user_id']
             keycloak_user_id = self.gitlab_service.get_idp_user_id(gitlab_user_id)
 
@@ -41,7 +40,7 @@ class HookService:
             self.gitlab_service.clone(body["project"]["http_url"], repo_path)
 
             # Create output path
-            date = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            date = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
             output_path = f'{repo_path}/outputs/{date}-{run_id}'
             os.makedirs(output_path)
             log(f"Output path created: {output_path}")
@@ -50,9 +49,9 @@ class HookService:
             run_meta = self.gitlab_service.get_metadata(f"{repo_path}/secd.yml")
             run_for = run_meta['runfor']
             gpu = run_meta['gpu']
-            database = run_meta['database']
+            #database = run_meta['database']
 
-            # Temp keycloak user
+            # Temp keycloak users
             temp_user_id = "temp_" + keycloak_user_id
             temp_user_password = "temp_password"
 
@@ -67,6 +66,7 @@ class HookService:
                 log("User does not have the necessary permissions.")
                 return
 
+            """
             # Get database IP address
             token_response: Dict[str, str] = self.keycloak_service.get_access_token_username_password(temp_user_id, temp_user_password)
             token = token_response['access_token']
@@ -80,7 +80,10 @@ class HookService:
                 log(f"Failed to get database host: {database_host_response.text}", "ERROR")
                 raise Exception("Failed to get database host")
             log(f"Database host response: {database_host_response.text}")
-            database_host = database_host_response.json()['database_pod_ip']
+            """
+
+            release_name = run_meta['database']
+            service_name = self.kubernetes_service.get_service_by_helm_release(release_name=release_name, namespace="storage")
 
             # Get database info
             image_name = self.docker_service.build_and_push_image(repo_path, run_id)
@@ -95,11 +98,10 @@ class HookService:
             cache_dir, mount_path = self.kubernetes_service.handle_cache_dir(run_meta, keycloak_user_id, run_id)
             db_pod_name = run_meta['database']
             log(f"Database pod name: {db_pod_name}")
-            db_pod = self.kubernetes_service.get_pod_by_name("storage", db_pod_name) # TODO: Make function get_pod_by_release_name
+            db_pod = self.kubernetes_service.get_pod_by_release_name(release_name=release_name,namespace="storage")
             db_label = db_pod.metadata.labels.get('database', '')  # Access the 'database' label
 
             log(f"Database label: {db_label}")
-
             log(f"Database pod found: {db_pod.metadata.name}")
 
             # Use the release name to construct the secret name
@@ -115,7 +117,7 @@ class HookService:
             env_vars = {
                 "DB_USER": db_user,
                 "DB_PASS": db_password,
-                "DB_HOST": database_host,
+                "DB_HOST": service_name,
                 "OUTPUT_PATH": '/output',
                 "SECD": 'PRODUCTION'
             }
@@ -135,9 +137,7 @@ class HookService:
                 envs=env_vars,
                 gpu=gpu,
                 mount_path=mount_path,
-                database = db_label,
-                #database_volume=database_volume,
-                #database_mount=database_mount
+                database = db_label
             )
             log(f"Pod created for {run_id}")
 
