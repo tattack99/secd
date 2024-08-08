@@ -88,26 +88,26 @@ class KeycloakService:
         return True
 
     def validate(self, auth_header):
-            log(f"auth_header: {auth_header}")
+            #log(f"auth_header: {auth_header}")
             try:
                 parts = auth_header.split(' ')
                 if len(parts) != 2 or parts[0].lower() != 'bearer':
                     raise KeycloakAuthenticationError("Invalid authorization header format")
 
                 token = parts[1]
-                log(f"Validating token: {token}")
+                #log(f"Validating token: {token}")
 
                 if not token:
                     raise KeycloakAuthenticationError("Authorization token required")
 
                 userinfo = self.keycloak_openid.introspect(token)
-                log(f"Token introspection response: {json.dumps(userinfo, indent=2)}")
+                #log(f"Token introspection response: {json.dumps(userinfo, indent=2)}")
 
                 if userinfo.get('active'):
-                    log("Token is active")
+                    #log("Token is active")
                     return True
                 else:
-                    log("Token is inactive")
+                    #log("Token is inactive")
                     return False
 
             except KeycloakAuthenticationError as e:
@@ -119,9 +119,9 @@ class KeycloakService:
 
     def get_access_token_username_password(self, username, password) -> dict[str, str]:
         try:
-            log(f"Requesting access token with username: {username}")
+            #log(f"Requesting access token with username: {username}")
             token = self.keycloak_openid.token(username=username, password=password, grant_type="client_credentials")
-            log(f"Access token response: {token}")
+            #log(f"Access token response: {token}")
             return token
 
         except Exception as e:
@@ -165,9 +165,9 @@ class KeycloakService:
     def check_user_in_group(self,user_id: str, group_name: str) -> bool:
         groups = self.get_user_groups(user_id)
         group_names = [group['name'] for group in groups]
-        log(f"User groups: {group_names}")
+        #log(f"User groups: {group_names}")
         if group_name in group_names:
-            log(f"User is part of the '{group_name}' group.")
+            #log(f"User is part of the '{group_name}' group.")
             return True
         else:
             log(f"User is not part of the '{group_name}' group.")
@@ -176,9 +176,9 @@ class KeycloakService:
     def check_user_has_role(self,user_id: str, client_id: str, role_name: str) -> bool:
         roles = self.get_user_client_roles(user_id, client_id)
         role_names = [role['name'] for role in roles]
-        log(f"User roles: {role_names}")
+        #log(f"User roles: {role_names}")
         if role_name in role_names:
-            log(f"User has access to '{role_name}' role.")
+            #log(f"User has access to '{role_name}' role.")
             return True
         else:
             log(f"User does not have the '{role_name}' role.")

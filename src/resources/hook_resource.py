@@ -16,7 +16,7 @@ class HookResource:
         try:
             self.validate_event_token(req)
             body = self.parse_request_body(req)
-            threading.Thread(target=self.hook_service.create_v2(body)).start()
+            threading.Thread(target=self.hook_service.create(body)).start()
             self.set_response(resp, falcon.HTTP_200, "success")
         except json.JSONDecodeError as e:
             self.handle_error(resp, falcon.HTTP_400, "Invalid body", e)
@@ -38,7 +38,6 @@ class HookResource:
                 log("Missing body in request", "ERROR")
                 raise falcon.HTTPBadRequest(title='Bad request', description='Missing body')
             body = json.loads(body_raw)
-            #log(f"Request body: {body}")
             return body
         except json.JSONDecodeError as e:
             log(f"Invalid body: {str(e)}", "ERROR")
@@ -46,7 +45,6 @@ class HookResource:
 
     def validate_event_token(self, req):
         event = req.get_header('X-Gitlab-Event')
-        log(f"Received event: {event}")
         if event not in ['Push Hook', 'System Hook']:
             log(f"Invalid X-Gitlab-Event header: {event}", "ERROR")
             raise gitlab.GitlabHeadError(error_message='Invalid X-Gitlab-Event header', response_code=400)

@@ -11,3 +11,5 @@ if __name__ == '__main__':
         log(f'Error: {e}', "ERROR")
     finally:
         log('Shutting down...')
+
+# TODO: working nfs

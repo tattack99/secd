@@ -16,7 +16,7 @@ class Daemon:
 
 
     def start_microk8s_cleanup(self):
-        log("Starting microk8s clean up service...")
+        #log("Starting microk8s clean up service...")
         while True:
             try:
                 cleaned_run_ids = self.kubernetes_service.cleanup_resources()

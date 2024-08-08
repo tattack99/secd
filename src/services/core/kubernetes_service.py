@@ -1,6 +1,7 @@
 import base64
 import datetime
 import os
+import time
 from kubernetes.client.rest import ApiException
 from kubernetes import client, config
 from typing import Dict, List, Optional
@@ -15,13 +16,14 @@ class KubernetesService:
         self.apps_v1 = client.AppsV1Api()
 
     def get_secret(self, namespace, secret_name, key):
-        log(f"Fetching secret {secret_name} in namespace {namespace}")
-        v1 = self.v1
-
-        secret = v1.read_namespaced_secret(secret_name, namespace)
-        secret_value = secret.data[key]
-
-        return base64.b64decode(secret_value).decode('utf-8')
+        #log(f"Fetching secret {secret_name} in namespace {namespace}")
+        try:
+            secret = self.v1.read_namespaced_secret(secret_name, namespace)
+            secret_value = secret.data[key]
+            return base64.b64decode(secret_value).decode('utf-8')
+        except ApiException as e:
+            log(f"Failed to get secret {secret_name} in namespace {namespace}: {e}", "ERROR")
+            raise Exception(f"Failed to get secret {secret_name} in namespace {namespace}: {e}")
 
     def get_pod(self, pod_name: str, namespace: str):
         try:
@@ -44,7 +46,7 @@ class KubernetesService:
             log(f"Failed to get PV {pv_name}: {e}", "ERROR")
             raise Exception(f"Failed to get PV {pv_name}: {e}")
 
-    def get_nfs_path(self, pod_name : str) -> str:
+    def get_nfs_path(self, pod_name : str):
         pod = self.get_pod(pod_name,"storage")
         for volume in pod.spec.volumes:
             if volume.persistent_volume_claim:
@@ -53,7 +55,7 @@ class KubernetesService:
                 pv = self.get_pv(pvc.spec.volume_name)
                 if pv.spec.nfs:
                     return pv.spec.nfs.path
-        return "None"
+        return None
 
     def get_pod_by_helm_release(self, release_name: str, namespace: str):
         try:
@@ -61,12 +63,12 @@ class KubernetesService:
 
             # List all pods in the specified namespace
             pods = self.v1.list_namespaced_pod(namespace=namespace)
-            log(f"Found {len(pods.items)} pods in namespace '{namespace}'.")
+            #log(f"Found {len(pods.items)} pods in namespace '{namespace}'.")
 
             for pod in pods.items:
                 # Access the labels dictionary
                 labels = pod.metadata.labels or {}
-                log(f"Pod '{pod.metadata.name}' has labels: {labels}")
+                #log(f"Pod '{pod.metadata.name}' has labels: {labels}")
 
                 # Check if the pod has a label indicating it's part of the release
                 release_label = labels.get('release')  # Safely access the 'release' label
@@ -76,8 +78,7 @@ class KubernetesService:
                     log(f"Pod '{pod_name}' matches Helm release '{release_name}'.")
                     return pod
 
-            log(f"No pod found for Helm release '{release_name}' in namespace '{namespace}'.", "WARNING")
-            return None  # Return None if no matching pod is found
+            raise Exception(f"No pod found for Helm release '{release_name}' in namespace '{namespace}'.")
 
         except ApiException as e:
             log(f"Failed to get pod for Helm release '{release_name}' in namespace '{namespace}': {e}", "ERROR")
@@ -85,30 +86,31 @@ class KubernetesService:
 
     def get_service_by_helm_release(self, release_name: str, namespace: str):
         try:
-            log(f"Searching for service with Helm release name '{release_name}' in namespace '{namespace}'.")
+            #log(f"Searching for service with Helm release name '{release_name}' in namespace '{namespace}'.")
 
             # List all services in the specified namespace
             services = self.v1.list_namespaced_service(namespace=namespace)
-            log(f"Found {len(services.items)} services in namespace '{namespace}'.")
+            #log(f"Found {len(services.items)} services in namespace '{namespace}'.")
 
             for service in services.items:
                 # Access the labels dictionary
                 labels = service.metadata.labels or {}
-                log(f"Service '{service.metadata.name}' has labels: {labels}")
+                #log(f"Service '{service.metadata.name}' has labels: {labels}")
 
                 # Check if the service has a label indicating it's part of the release
                 release_label = labels.get('release')  # Safely access the 'release' label
 
                 if release_label == release_name:
                     service_name = service.metadata.name
-                    log(f"Service '{service_name}' matches Helm release '{release_name}'.")
+                    #log(f"Service '{service_name}' matches Helm release '{release_name}'.")
 
                     # Construct the FQDN for the service
                     service_fqdn = f"{service_name}.{namespace}.svc.cluster.local"
                     return service_fqdn
 
-            log(f"No service found for Helm release '{release_name}' in namespace '{namespace}'.", "WARNING")
-            return None  # Return None if no matching service is found
+            raise Exception(f"No service found for Helm release '{release_name}' in namespace '{namespace}'.", "WARNING")
+            #log(f"No service found for Helm release '{release_name}' in namespace '{namespace}'.", "WARNING")
+            #return None  # Return None if no matching service is found
 
         except ApiException as e:
             log(f"Failed to get service for Helm release '{release_name}' in namespace '{namespace}': {e}", "ERROR")
@@ -117,10 +119,10 @@ class KubernetesService:
 
 
     def get_pod_by_name(self, namespace: str, pod_name: str):
-        log(f"Fetching pod '{pod_name}' in namespace '{namespace}'")
+        #log(f"Fetching pod '{pod_name}' in namespace '{namespace}'")
         try:
             pod = self.v1.read_namespaced_pod(pod_name, namespace)
-            log(f"Pod '{pod_name}' fetched successfully.")
+            #log(f"Pod '{pod_name}' fetched successfully.")
             return pod
         except client.exceptions.ApiException as e:
             error_message = f"Exception when calling CoreV1Api->read_namespaced_pod: {str(e)}"
@@ -128,28 +130,24 @@ class KubernetesService:
             raise RuntimeError(error_message)
 
     def get_pod_in_namespace(self, namespace: str) -> List[str]:
-        v1 = self.v1
-        pods = v1.list_namespaced_pod(namespace)
+        pods = self.v1.list_namespaced_pod(namespace)
         return [pod.metadata.name for pod in pods.items]
 
-    def get_pod_ip_in_namespace(self, namespace, pod_name_prefix) -> str:
+    def get_pod_ip_in_namespace(self, namespace, pod_name_prefix):
         pods = self.v1.list_namespaced_pod(namespace)
         for pod in pods.items:
             if pod_name_prefix in pod.metadata.name:
                 return pod.status.pod_ip
-        return ""
+        return None
 
     def handle_cache_dir(self, run_meta, keycloak_user_id, run_id):
-        log(f"Handling cache directory for run: {run_id}")
         cache_dir = None
         mount_path = None
         if "cache_dir" in run_meta and run_meta["cache_dir"]:
             mount_path = run_meta.get('mount_path', '/cache')
-            log(f"Found custom mount_path: {mount_path}" if 'mount_path' in run_meta else "Using default mount_path: /cache")
 
             cache_dir = run_meta['cache_dir']
             cache_path = f"{get_settings()['path']['cachePath']}/{keycloak_user_id}/{cache_dir}"
-            log(f"Found cache_dir: {cache_path}")
 
             if not os.path.exists(cache_path):
                 os.makedirs(cache_path)
@@ -157,7 +155,6 @@ class KubernetesService:
 
             pvc_repo_path = get_settings()['k8s']['pvcPath']
             self.create_persistent_volume(run_id, f'{pvc_repo_path}/cache/{keycloak_user_id}/{cache_dir}', "cache")
-            log(f"Cache PVC created for {run_id}")
         return cache_dir, mount_path
 
     def create_namespace(self, user_id: str, run_id: str, run_for: int):
@@ -165,9 +162,6 @@ class KubernetesService:
         run_until = datetime.datetime.now() + datetime.timedelta(hours=run_for)
         namespace_name = f"secd-{run_id}"
 
-        log(f"Creating namespace: {namespace_name} for user: {user_id} until: {run_until}")
-
-        # Define the namespace object with labels
         namespace = client.V1Namespace(
             metadata=client.V1ObjectMeta(
                 name=namespace_name,
@@ -181,9 +175,30 @@ class KubernetesService:
             )
         )
 
-        # Create the namespace in the cluster
         v1.create_namespace(body=namespace)
-        log(f"Namespace {namespace_name} created with label 'access=database-access'")
+
+    def create_persistent_volume_claim(self, pvc_name, namespace, release_name, storage_size="100Gi"):
+        pvc_manifest = {
+            "apiVersion": "v1",
+            "kind": "PersistentVolumeClaim",
+            "metadata": {
+                "name": pvc_name,
+                "namespace": namespace
+            },
+            "spec": {
+                "accessModes": ["ReadOnlyMany"],  # Set read-only for executing pods
+                "resources": {
+                    "requests": {
+                        "storage": storage_size
+                    }
+                },
+                "storageClassName": "nfs",  # Ensure it matches the PV storage class
+                "volumeName": f"pv-storage-{release_name}"  # Bind to the existing PV
+            }
+        }
+        self.v1.create_namespaced_persistent_volume_claim(namespace=namespace, body=pvc_manifest)
+        log(f"PVC {pvc_name} created in namespace {namespace}")
+
 
 
     def _create_volume(self, volume_name: str, claim_name: str) -> client.V1Volume:
@@ -204,7 +219,7 @@ class KubernetesService:
             log(f"Error creating volume: {str(e)}", "ERROR")
             raise
 
-    def _create_mount(self, volume_name: str, mount_path: str) -> client.V1VolumeMount:
+    def _create_mount(self, volume_name: str, mount_path: str, read_only: bool = False) -> client.V1VolumeMount:
         try:
             if not volume_name:
                 raise ValueError("Volume name cannot be empty")
@@ -213,7 +228,8 @@ class KubernetesService:
 
             mount = client.V1VolumeMount(
                 name=volume_name,
-                mount_path=mount_path
+                mount_path=mount_path,
+                read_only=read_only
             )
             return mount
         except Exception as e:
@@ -270,20 +286,33 @@ class KubernetesService:
         return resources, labels
 
 
-    def create_pod_v1(self, run_id: str, image: str, envs: Dict[str, str], gpu: str = "", mount_path: Optional[str] = None, database: str = "") -> None:
+    def create_pod_v1(
+        self,
+        run_id: str,
+        namespace: str,
+        image: str,
+        envs: Dict[str, str],
+        gpu: str = "",
+        mount_path: Optional[str] = None,
+        database: str = "",
+        pvc_name: str = "pvc-storage-nfs-1",
+    ) -> None:
         try:
             pod_name: str = f"secd-{run_id}"
             k8s_envs: List[client.V1EnvVar] = [client.V1EnvVar(name=key, value=value) for key, value in envs.items()]
             resources: client.V1ResourceRequirements = client.V1ResourceRequirements()
             labels: Dict[str, str] = {
-                "access": f"{database}"  # Ensure the label matches the network policy
+                "access": f"{database}",  # Ensure the label matches the network policy
+                "run_id": run_id
             }
             volumes: List[client.V1Volume] = []
             volume_mounts: List[client.V1VolumeMount] = []
 
-            log(f"Creating pod: {pod_name} with image: {image}")
+            # Use the specified PVC for NFS storage
+            volumes.append(self._create_volume(pvc_name, pvc_name))
+            volume_mounts.append(self._create_mount(pvc_name, "/data", read_only=True))  # Set read-only if needed
 
-
+            # Create additional volumes and mounts for output and cache directories
             volumes.append(self._create_volume(f'vol-{run_id}-output', f'secd-pvc-{run_id}-output'))
             volume_mounts.append(self._create_mount(f'vol-{run_id}-output', '/output'))
 
@@ -291,30 +320,29 @@ class KubernetesService:
                 volumes.append(self._create_volume(f'vol-{run_id}-cache', f'secd-pvc-{run_id}-cache'))
                 volume_mounts.append(self._create_mount(f'vol-{run_id}-cache', mount_path))
 
-
             if gpu:
                 resources, gpu_labels = self._set_resources(gpu=1)
                 labels.update(gpu_labels)
 
-            containers = [self._create_container(pod_name, image, k8s_envs, volume_mounts, resources)]
-
-            pod_spec = self._create_pod_spec(volumes, containers)
-
+            container = self._create_container(pod_name, image, k8s_envs, volume_mounts, resources)
+            pod_spec = self._create_pod_spec(volumes, [container])
             pod = self._create_pod_object(pod_name, labels, pod_spec)
 
-            self.v1.create_namespaced_pod(namespace=f"secd-{run_id}", body=pod)
-            log(f"Pod {pod_name} created in namespace secd-{run_id}")
+            # Create the pod in the specified namespace
+            self.v1.create_namespaced_pod(namespace=namespace, body=pod)
+            log(f"Pod {pod_name} created in namespace {namespace}")
 
         except Exception as e:
             log(f"Error creating pod: {str(e)}", "ERROR")
             raise Exception(f"Error creating pod: {e}")
 
 
+
     def create_pod(self, run_id: str, image: str, envs: Dict[str, str], gpu, mount_path):
         v1 = self.v1
         pod_name = f"secd-{run_id}"
 
-        log(f"Creating pod: {pod_name} with image: {image}")
+        #log(f"Creating pod: {pod_name} with image: {image}")
 
         k8s_envs = [client.V1EnvVar(name=key, value=value) for key, value in envs.items()]
 
@@ -383,7 +411,7 @@ class KubernetesService:
         pv_name = f'secd-{run_id}-{type}'
         pvc_name = f'secd-pvc-{run_id}-{type}'
 
-        log(f"Creating persistent volume: {pv_name} with path: {path}")
+        #log(f"Creating persistent volume: {pv_name} with path: {path}")
 
         pv = client.V1PersistentVolume(
             metadata=client.V1ObjectMeta(name=pv_name),
@@ -398,7 +426,7 @@ class KubernetesService:
         )
 
         v1.create_persistent_volume(body=pv)
-        log(f"Persistent volume {pv_name} created")
+        #log(f"Persistent volume {pv_name} created")
 
         pvc = client.V1PersistentVolumeClaim(
             metadata=client.V1ObjectMeta(name=pvc_name),
@@ -412,31 +440,33 @@ class KubernetesService:
         )
 
         v1.create_namespaced_persistent_volume_claim(body=pvc, namespace=f"secd-{run_id}")
-        log(f"Persistent volume claim {pvc_name} created in namespace secd-{run_id}")
+        #log(f"Persistent volume claim {pvc_name} created in namespace secd-{run_id}")
 
-    def delete_by_user_id(self, user_id: str) -> List[str]:
-        run_ids = []
+    def get_pv_by_helm_release(self, release_name: str):
+        try:
+            # List all persistent volumes
+            pvs = self.v1.list_persistent_volume()
 
-        log(f"Deleting resources for user: {user_id}")
+            # Iterate over each PV to find the one with the matching release label
+            for pv in pvs.items:
+                labels = pv.metadata.labels
 
-        namespaces = self.v1.list_namespace()
-        for namespace in namespaces.items:
-            annotations = namespace.metadata.annotations
-            if annotations is None or 'userid' not in annotations:
-                continue
+                # Check if labels exist before accessing them
+                if labels is not None:
+                    # Check if the release label matches the specified release name
+                    if labels.get('release') == release_name:
+                        log(f"Found PV for release '{release_name}': {pv.metadata.name}")
+                        return pv
 
-            k8s_user_id = annotations.get('userid')
-            if user_id == k8s_user_id:
-                run_id = namespace.metadata.name.replace("secd-", "")
-                log(f"Deleting namespace: {namespace.metadata.name} for user: {user_id}")
+            # Log a warning if no matching PV is found
+            log(f"No PV found with release name '{release_name}'", "WARNING")
+            return None
 
-                self.v1.delete_namespace(name=namespace.metadata.name)
-                self.v1.delete_persistent_volume(name=f'{namespace.metadata.name}-output')
+        except ApiException as e:
+            # Log and raise exception if API call fails
+            log(f"Failed to get PV by Helm release '{release_name}': {e}", "ERROR")
+            raise Exception(f"Failed to get PV by Helm release '{release_name}': {e}")
 
-                run_ids.append(run_id)
-
-        log(f"Deleted resources for user: {user_id}, run_ids: {run_ids}")
-        return run_ids
 
     def cleanup_resources(self) -> List[str]:
         run_ids = []
@@ -450,7 +480,6 @@ class KubernetesService:
         return run_ids
 
     def _should_cleanup_namespace(self, namespace) -> bool:
-        """Determine if a namespace should be cleaned up."""
         annotations = namespace.metadata.annotations
         if annotations is None or 'rununtil' not in annotations:
             return False
@@ -461,11 +490,103 @@ class KubernetesService:
         return expired or completed
 
     def _is_namespace_expired(self, rununtil: str) -> bool:
-        """Check if the namespace is expired."""
         return datetime.datetime.fromisoformat(rununtil) < datetime.datetime.now()
 
+    def _get_pvc_names(self, namespace_name: str) -> List[str]:
+        """
+        Retrieves all PVC names in the given namespace.
+        """
+        pvc_name_list = []
+        try:
+            pvc_list = self.v1.list_namespaced_persistent_volume_claim(namespace=namespace_name)
+            for pvc in pvc_list.items:
+                pvc_name_list.append(pvc.metadata.name)
+        except client.exceptions.ApiException as e:
+            log(f"Failed to retrieve PVC names in namespace {namespace_name}: {e}", "ERROR")
+        return pvc_name_list
+
+    def _get_pv_name_from_any_pvc(self, namespace_name: str) -> List[str]:
+        """
+        Retrieves the PV names associated with all PVCs in the given namespace.
+        """
+        pv_name_list = []
+        try:
+            # List all PVCs in the namespace
+            pvc_list = self.v1.list_namespaced_persistent_volume_claim(namespace=namespace_name)
+            for pvc in pvc_list.items:
+                pv_name = pvc.spec.volume_name
+                if pv_name:
+                    log(f"Found PV {pv_name} for PVC {pvc.metadata.name} in namespace {namespace_name}")
+                    pv_name_list.append(pv_name)
+        except client.exceptions.ApiException as e:
+            log(f"Failed to retrieve PV name from any PVC in namespace {namespace_name}: {e}", "ERROR")
+        return pv_name_list
+
+    def _wait_for_pvc_deletion(self, namespace_name: str, pvc_name_list: List[str], timeout: int = 60):
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            all_deleted = True
+            for pvc_name in pvc_name_list:
+                try:
+                    self.v1.read_namespaced_persistent_volume_claim(name=pvc_name, namespace=namespace_name)
+                    log(f"Waiting for PVC {pvc_name} in namespace {namespace_name} to be deleted...")
+                    all_deleted = False
+                except client.exceptions.ApiException as e:
+                    if e.status == 404:
+                        log(f"PVC {pvc_name} in namespace {namespace_name} has been deleted.")
+                    else:
+                        log(f"Error checking PVC {pvc_name} in namespace {namespace_name}: {e}", "ERROR")
+            if all_deleted:
+                break
+            time.sleep(5)  # Sleep for a short interval before retrying
+        if not all_deleted:
+            log(f"Timeout waiting for PVC deletion in namespace {namespace_name}.")
+
+    def _make_pv_available(self, pv_name_list: List[str]):
+        for pv_name in pv_name_list:
+            try:
+                pv = self.v1.read_persistent_volume(pv_name)
+                if pv.status.phase == "Released":
+                    log(f"Releasing PV {pv_name} for new claims.")
+                    self.v1.patch_persistent_volume(
+                        name=pv_name,
+                        body={"spec": {"claimRef": None}}
+                    )
+                    log(f"Persistent Volume {pv_name} is now available.")
+                else:
+                    log(f"PV {pv_name} is not in Released state. Current state: {pv.status.phase}")
+            except client.exceptions.ApiException as e:
+                log(f"Error releasing PV {pv_name}: {e}", "ERROR")
+
+
+    def _delete_pvc(self, namespace_name: str):
+        try:
+            pvc_name_list = []
+            pvc_list = self.v1.list_namespaced_persistent_volume_claim(namespace=namespace_name)
+            for pvc in pvc_list.items:
+                self.v1.delete_namespaced_persistent_volume_claim(name=pvc.metadata.name, namespace=namespace_name)
+                log(f"PVC {pvc.metadata.name} deleted in namespace {namespace_name}")
+                pvc_name_list.append(pvc.metadata.name)
+            return pvc_name_list
+        except Exception as e:
+            log(f"Failed to delete PVC in namespace {namespace_name}: {e}", "ERROR")
+
+    def _delete_namespace(self, namespace_name: str):
+        try:
+            self.v1.delete_namespace(name=namespace_name)
+            log(f"Namespace {namespace_name} deleted")
+        except Exception as e:
+            log(f"Failed to delete namespace {namespace_name}: {e}", "ERROR")
+
+    def _delete_persistent_volume(self, namespace_name: str):
+        try:
+            log(f"Attempting to delete persistent volume: {namespace_name}-output")
+            self.v1.delete_persistent_volume(name=f'{namespace_name}-output')
+            log(f"Persistent volume {namespace_name}-output deleted")
+        except Exception as e:
+            log(f"Failed to delete persistent volume: {e}", "ERROR")
+
     def _is_pod_completed(self, namespace_name: str) -> bool:
-        """Check if the pod in the namespace is completed."""
         pod_list = self.v1.list_namespaced_pod(namespace=namespace_name)
         if len(pod_list.items) > 0:
             pod = pod_list.items[0]
@@ -474,28 +595,18 @@ class KubernetesService:
         return False
 
     def _cleanup_namespace(self, namespace) -> str:
-        """Perform the cleanup of the namespace and its associated resources."""
         run_id = namespace.metadata.name.replace("secd-", "")
         log(f"Finishing run {namespace.metadata.name} - Deleting resources")
 
         self._delete_namespace(namespace.metadata.name)
         self._delete_persistent_volume(namespace.metadata.name)
 
+        # Get lists of PVCs and PVs
+        pvc_name_list = self._get_pvc_names(namespace.metadata.name)
+        pv_name_list = self._get_pv_name_from_any_pvc(namespace.metadata.name)
+
+        if pv_name_list:
+            self._wait_for_pvc_deletion(namespace.metadata.name, pvc_name_list)
+            self._make_pv_available(pv_name_list)
+
         return run_id
-
-    def _delete_namespace(self, namespace_name: str):
-        """Delete the specified namespace."""
-        try:
-            self.v1.delete_namespace(name=namespace_name)
-            log(f"Namespace {namespace_name} deleted")
-        except Exception as e:
-            log(f"Failed to delete namespace {namespace_name}: {e}", "ERROR")
-
-    def _delete_persistent_volume(self, namespace_name: str):
-        """Attempt to delete the persistent volume associated with the namespace."""
-        try:
-            log(f"Attempting to delete persistent volume: {namespace_name}-output")
-            self.v1.delete_persistent_volume(name=f'{namespace_name}-output')
-            log(f"Persistent volume {namespace_name}-output deleted")
-        except Exception as e:
-            log(f"Failed to delete persistent volume: {e}", "ERROR")

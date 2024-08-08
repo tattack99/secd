@@ -17,12 +17,9 @@ class GitlabService:
         self.client = gitlab.Gitlab(
             url = self.glSettings['url'],
             private_token = self.glSettings['token']
-        )
-
-        # Test authentication
+            )
         try:
             self.client.auth()
-            log("Authentication successful")
         except gitlab.exceptions.GitlabAuthenticationError as e:
             log(f"Authentication failed: {e}", "ERROR")
 

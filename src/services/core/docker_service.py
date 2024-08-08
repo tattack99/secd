@@ -10,9 +10,9 @@ class DockerService:
 
     def build_image(self, repo_path, image_name):
         try:
-            log(f"Building image {image_name} at {repo_path}")
+            #log(f"Building image {image_name} at {repo_path}")
             self.client.images.build(path=repo_path, tag=image_name)
-            log(f"Image {image_name} built successfully")
+            #log(f"Image {image_name} built successfully")
         except docker.errors.BuildError as e:
             log(f"Build error for image {image_name}: {str(e)}", "ERROR")
             raise Exception(f"Build error for image {image_name}: {e}")

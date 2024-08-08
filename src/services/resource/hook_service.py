@@ -2,7 +2,6 @@ import datetime
 import os
 from typing import Dict
 import uuid
-import requests
 
 from src.util.logger import log
 from src.util.setup import get_settings
@@ -24,7 +23,7 @@ class HookService:
         self.docker_service = docker_service
         self.kubernetes_service = kubernetes_service
 
-    def create_v2(self, body):
+    def create(self, body):
         try:
             log("Starting create process...")
             self.gitlab_service.validate_body(body)
@@ -48,12 +47,25 @@ class HookService:
 
             image_name = self.docker_service.build_and_push_image(repo_path, run_id)
 
-            self.setup_kubernetes_resources(temp_user_id, date, run_id, output_path, run_meta)
+            self.setup_kubernetes_resources(temp_user_id, date, run_id, run_meta)
+            log(f"Kubernetes resources created for {run_id}")
 
             env_vars = self.prepare_environment_variables(service_name, release_name)
+            log(f"Environment variables prepared for {run_id}, env_vars: {env_vars}")
 
-            self.create_kubernetes_pod(run_id, keycloak_user_id,image_name, run_meta, env_vars)
-            log(f"Pod created for {run_id}")
+            pv = self.kubernetes_service.get_pv_by_helm_release(release_name) # need to make sure pv exists for release
+            if not pv:
+                log(f"PV not found for release {release_name}", "WARNING")
+                raise Exception(f"PV not found for release {release_name}")
+            log(f"PV found for {release_name}")
+
+            # Create PVC in the executing pod's namespace
+            pvc_name = f"pvc-storage-{release_name}"
+            namespace = f"secd-{run_id}"
+            self.kubernetes_service.create_persistent_volume_claim(pvc_name, namespace, release_name, storage_size="100Gi")
+            log(f"PVC created for {run_id}")
+
+            self.create_kubernetes_pod(run_id, keycloak_user_id,image_name, run_meta, env_vars, pvc_name, namespace)
 
         except Exception as e:
             log(f"Error in create process: {str(e)}", "ERROR")
@@ -85,7 +97,7 @@ class HookService:
         temp_user_id = self.keycloak_service.create_temp_user(temp_user_id, temp_user_password)
         return temp_user_id, temp_user_password
 
-    def setup_kubernetes_resources(self, tmp_user_id: str, date:str, run_id: str, output_path: str, run_meta: Dict):
+    def setup_kubernetes_resources(self, tmp_user_id: str, date:str, run_id: str, run_meta: Dict):
         pvc_repo_path = get_settings()['k8s']['pvcPath']
         self.kubernetes_service.create_namespace(tmp_user_id, run_id, run_meta['runfor'])
         self.kubernetes_service.create_persistent_volume(run_id, f'{pvc_repo_path}/repos/{run_id}/outputs/{date}-{run_id}')
@@ -99,12 +111,13 @@ class HookService:
             "DB_USER": db_user,
             "DB_PASS": db_password,
             "DB_HOST": service_name,
+            "NFS_PATH": '/data',
             "OUTPUT_PATH": '/output',
             "SECD": 'PRODUCTION'
         }
         return env_vars
 
-    def create_kubernetes_pod(self, run_id: str, keycloak_user_id: str, image_name: str, run_meta: Dict, env_vars: Dict[str, str]):
+    def create_kubernetes_pod(self, run_id: str, keycloak_user_id: str, image_name: str, run_meta: Dict, env_vars: Dict[str, str], pvc_name: str, namespace: str):
         cache_dir, mount_path = self.kubernetes_service.handle_cache_dir(run_meta, keycloak_user_id, run_id)
         release_name = run_meta['database']
         log(f"Database pod name: {release_name}")
@@ -117,5 +130,7 @@ class HookService:
             envs=env_vars,
             gpu=run_meta['gpu'],
             mount_path=mount_path,
-            database=db_label
+            database=db_label,
+            namespace=namespace,
         )
+
