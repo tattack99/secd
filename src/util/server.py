@@ -10,10 +10,11 @@ from secure.src.services.core.keycloak_service import KeycloakService
 from secure.src.services.core.kubernetes_service import KubernetesService
 from secure.src.util.daemon import Daemon
 from secure.src.services.resource.hook_service import HookService
+from src.services.core.kubernetes_service_v1 import KubernetesServiceV1
 
 class Server:
     def __init__(self):
-        log("Starting server...")
+        log("Starting server....")
         load_settings()
 
         self.apps = []
@@ -24,6 +25,7 @@ class Server:
         self.docker_service = DockerService()
         self.kubernetes_service = KubernetesService()
         self.gitlab_service = GitlabService()
+        self.kubernetes_service_v1 = KubernetesServiceV1()
 
         # Instantiate resources services
         self.hook_service = HookService(
@@ -47,13 +49,11 @@ class Server:
         self.apps.append((app, port))
 
     def serve_app(self, app, port):
-        #log(f"Starting server on port {port}...")
         try:
             with make_server('', port, app) as httpd:
                 httpd.serve_forever()
         except Exception as e:
             log(f"Error starting server: {e}", "ERROR")
-
 
     def run(self):
         log("Running server...")

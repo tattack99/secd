@@ -165,9 +165,7 @@ class KeycloakService:
     def check_user_in_group(self,user_id: str, group_name: str) -> bool:
         groups = self.get_user_groups(user_id)
         group_names = [group['name'] for group in groups]
-        #log(f"User groups: {group_names}")
         if group_name in group_names:
-            #log(f"User is part of the '{group_name}' group.")
             return True
         else:
             log(f"User is not part of the '{group_name}' group.")
@@ -176,9 +174,7 @@ class KeycloakService:
     def check_user_has_role(self,user_id: str, client_id: str, role_name: str) -> bool:
         roles = self.get_user_client_roles(user_id, client_id)
         role_names = [role['name'] for role in roles]
-        #log(f"User roles: {role_names}")
         if role_name in role_names:
-            #log(f"User has access to '{role_name}' role.")
             return True
         else:
             log(f"User does not have the '{role_name}' role.")

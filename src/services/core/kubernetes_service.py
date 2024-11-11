@@ -158,7 +158,6 @@ class KubernetesService:
         return cache_dir, mount_path
 
     def create_namespace(self, user_id: str, run_id: str, run_for: int):
-        v1 = self.v1
         run_until = datetime.datetime.now() + datetime.timedelta(hours=run_for)
         namespace_name = f"secd-{run_id}"
 
@@ -175,7 +174,7 @@ class KubernetesService:
             )
         )
 
-        v1.create_namespace(body=namespace)
+        self.v1.create_namespace(body=namespace)
 
     def create_persistent_volume_claim(self, pvc_name, namespace, release_name, storage_size="100Gi"):
         pvc_manifest = {
@@ -591,7 +590,7 @@ class KubernetesService:
         if len(pod_list.items) > 0:
             pod = pod_list.items[0]
             log(f"Pod found in namespace: {namespace_name} with phase: {pod.status.phase}")
-            return pod.status.phase == 'Succeeded'
+            return pod.status.phase == 'Succeeded' or pod.status.phase == 'Failed'
         return False
 
     def _cleanup_namespace(self, namespace) -> str:

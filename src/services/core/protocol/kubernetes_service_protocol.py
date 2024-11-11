@@ -1,0 +1,13 @@
+from typing import Protocol
+
+class KubernetesServiceProtocol(Protocol):
+
+    def create_namespace(self) -> None:
+        ...
+    def read_namespace(self) -> None:
+        ...
+    def update_namespace(self) -> None:
+        ...
+    def delete_namespace(self) -> None:
+        ...
+

@@ -26,20 +26,31 @@ class HookService:
     def create(self, body):
         try:
             log("Starting create process...")
+            user_have_permission = False
+
             self.gitlab_service.validate_body(body)
             gitlab_user_id = body['user_id']
+
+
             keycloak_user_id = self.gitlab_service.get_idp_user_id(gitlab_user_id)
-            user_have_permission = self.check_user_permissions(keycloak_user_id)
-            if not user_have_permission:
-                log("User does not have the necessary permissions.")
-                raise Exception("User does not have the necessary permissions.")
+            user_in_group = self.keycloak_service.check_user_in_group(keycloak_user_id, "secd") # All user must be in secd to access
+            if not user_in_group:
+                log("User is not in the group.")
+                raise Exception("User is not in the group.")
+
 
             run_id, repo_path, output_path, date = self.prepare_repository_and_paths(body)
             run_meta = self.gitlab_service.get_metadata(f"{repo_path}/secd.yml")
+            release_name = run_meta['database']
+
+            has_role = self.keycloak_service.check_user_has_role(keycloak_user_id, "database-service", release_name)
+            if not has_role:
+                log(f"Keycloak user: {keycloak_user_id}, does not have the required role: {release_name}.")
+                raise Exception("User does not have the required role.")
+
 
             temp_user_id, temp_user_password = self.create_temp_user(keycloak_user_id)
 
-            release_name = run_meta['database']
             service_name = self.kubernetes_service.get_service_by_helm_release(release_name, "storage")
             if not service_name:
                 log(f"Service not found for release {release_name}", "WARNING")
@@ -53,13 +64,12 @@ class HookService:
             env_vars = self.prepare_environment_variables(service_name, release_name)
             log(f"Environment variables prepared for {run_id}, env_vars: {env_vars}")
 
-            pv = self.kubernetes_service.get_pv_by_helm_release(release_name) # need to make sure pv exists for release
+            pv = self.kubernetes_service.get_pv_by_helm_release(release_name)
             if not pv:
                 log(f"PV not found for release {release_name}", "WARNING")
                 raise Exception(f"PV not found for release {release_name}")
             log(f"PV found for {release_name}")
 
-            # Create PVC in the executing pod's namespace
             pvc_name = f"pvc-storage-{release_name}"
             namespace = f"secd-{run_id}"
             self.kubernetes_service.create_persistent_volume_claim(pvc_name, namespace, release_name, storage_size="100Gi")
@@ -132,5 +142,6 @@ class HookService:
             mount_path=mount_path,
             database=db_label,
             namespace=namespace,
+            pvc_name=pvc_name,
         )
 
