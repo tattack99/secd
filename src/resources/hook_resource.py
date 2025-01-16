@@ -3,9 +3,9 @@ import json
 import threading
 import gitlab
 
-from src.services.resource.hook_service import HookService
-from src.util.logger import log
-from src.util.setup import get_settings
+from app.src.services.resource.hook_service import HookService
+from app.src.util.logger import log
+from app.src.util.setup import get_settings
 
 class HookResource:
     def __init__(self, hook_service: HookService):

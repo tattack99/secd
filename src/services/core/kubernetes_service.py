@@ -5,8 +5,8 @@ import time
 from kubernetes.client.rest import ApiException
 from kubernetes import client, config
 from typing import Dict, List, Optional
-from secure.src.util.setup import get_settings
-from secure.src.util.logger import log
+from app.src.util.setup import get_settings
+from app.src.util.logger import log
 
 class KubernetesService:
     def __init__(self) -> None:
@@ -210,7 +210,8 @@ class KubernetesService:
             volume = client.V1Volume(
                 name=volume_name,
                 persistent_volume_claim=client.V1PersistentVolumeClaimVolumeSource(
-                    claim_name=claim_name
+                    claim_name=claim_name,
+                    read_only=True
                 )
             )
             return volume

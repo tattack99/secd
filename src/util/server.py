@@ -1,15 +1,15 @@
 import falcon
 import threading
 from wsgiref.simple_server import make_server
-from secure.src.util.setup import load_settings
-from secure.src.util.logger import log
-from secure.src.resources.hook_resource import HookResource
-from secure.src.services.core.docker_service import DockerService
-from secure.src.services.core.gitlab_service import GitlabService
-from secure.src.services.core.keycloak_service import KeycloakService
-from secure.src.services.core.kubernetes_service import KubernetesService
-from secure.src.util.daemon import Daemon
-from secure.src.services.resource.hook_service import HookService
+from app.src.util.setup import load_settings
+from app.src.util.logger import log
+from app.src.resources.hook_resource import HookResource
+from app.src.services.core.docker_service import DockerService
+from app.src.services.core.gitlab_service import GitlabService
+from app.src.services.core.keycloak_service import KeycloakService
+from app.src.services.core.kubernetes_service import KubernetesService
+from app.src.util.daemon import Daemon
+from app.src.services.resource.hook_service import HookService
 from src.services.core.kubernetes_service_v1 import KubernetesServiceV1
 
 class Server:

@@ -8,8 +8,8 @@ import subprocess
 from typing import Dict
 from git import Repo
 from cerberus import Validator
-from secure.src.util.logger import log
-from secure.src.util.setup import get_settings
+from app.src.util.logger import log
+from app.src.util.setup import get_settings
 
 class GitlabService:
     def __init__(self):

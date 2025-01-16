@@ -1,7 +1,7 @@
 import docker
 import docker.errors
-from secure.src.util.setup import get_settings
-from secure.src.util.logger import log
+from app.src.util.setup import get_settings
+from app.src.util.logger import log
 
 class DockerService:
     def __init__(self) -> None:

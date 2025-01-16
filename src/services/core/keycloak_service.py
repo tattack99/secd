@@ -1,8 +1,8 @@
 import json
 from keycloak import KeycloakAuthenticationError, KeycloakGetError, KeycloakAdmin, KeycloakOpenIDConnection, KeycloakPostError, KeycloakOpenID
 from typing import Dict, List
-from secure.src.util.setup import get_settings
-from secure.src.util.logger import log
+from app.src.util.setup import get_settings
+from app.src.util.logger import log
 
 
 class KeycloakService:

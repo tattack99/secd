@@ -2,7 +2,7 @@ import yaml
 import os
 from cerberus import Validator
 from dotenv import load_dotenv
-from secure.src.util.logger import log
+from app.src.util.logger import log
 
 load_dotenv()
 settings = {}
@@ -26,7 +26,7 @@ def load_settings(config_path=None):
     with open(config_path, 'r') as yaml_file:
         loaded_yaml = yaml.load(yaml_file, Loader=yaml.FullLoader)
 
-    schema_path = "/home/cloud/secd/secure/config/settings-schema.yml"
+    schema_path = "/home/cloud/secd/app/config/settings-schema.yml"
     if not os.path.exists(schema_path):
         log(f'Schema file not found: {schema_path}', "ERROR")
         raise Exception(f'Schema file not found: {schema_path}')

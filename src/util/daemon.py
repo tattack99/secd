@@ -1,9 +1,9 @@
 import time
 
-from secure.src.services.core.kubernetes_service import KubernetesService
-from secure.src.services.core.gitlab_service import GitlabService
+from app.src.services.core.kubernetes_service import KubernetesService
+from app.src.services.core.gitlab_service import GitlabService
 
-from secure.src.util.logger import log
+from app.src.util.logger import log
 
 class Daemon:
     def __init__(
