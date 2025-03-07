@@ -13,10 +13,12 @@ from app.src.util.setup import get_settings
 
 class GitlabService:
     def __init__(self):
+        log ("Initializing GitLab service")
         self.glSettings = get_settings()['gitlab']
         self.client = gitlab.Gitlab(
             url = self.glSettings['url'],
-            private_token = self.glSettings['token']
+            private_token = self.glSettings['token'],
+            ssl_verify=self.glSettings['ssl_verify_path'],
             )
         try:
             self.client.auth()
@@ -86,18 +88,12 @@ class GitlabService:
             commit = None
 
             try:
-                # Attempt to retrieve the project
-                log(f"Attempting to retrieve project {project_id}")
                 project = self.client.projects.get(project_id)
                 log(f"Successfully retrieved project {project_id}")
 
-                # Attempt to retrieve the commit
-                log(f"Attempting to retrieve commit {commit_id} from project {project_id}")
                 commit = project.commits.get(commit_id)
                 log(f"Successfully retrieved commit {commit_id}")
 
-                # Attempt to retrieve the GPG signature
-                log(f"Attempting to retrieve GPG signature for commit {commit_id}")
                 gpg_signature = commit.signature()
                 log(f"Successfully retrieved GPG signature for commit {commit_id}: {gpg_signature}")
 

@@ -27,17 +27,14 @@ class HookService:
         try:
             log("Starting create process...")
             user_have_permission = False
-
             self.gitlab_service.validate_body(body)
             gitlab_user_id = body['user_id']
-
 
             keycloak_user_id = self.gitlab_service.get_idp_user_id(gitlab_user_id)
             user_in_group = self.keycloak_service.check_user_in_group(keycloak_user_id, "secd") # All user must be in secd to access
             if not user_in_group:
                 log("User is not in the group.")
                 raise Exception("User is not in the group.")
-
 
             run_id, repo_path, output_path, date = self.prepare_repository_and_paths(body)
             run_meta = self.gitlab_service.get_metadata(f"{repo_path}/secd.yml")
@@ -53,27 +50,23 @@ class HookService:
 
             service_name = self.kubernetes_service.get_service_by_helm_release(release_name, "storage")
             if not service_name:
-                log(f"Service not found for release {release_name}", "WARNING")
                 raise Exception(f"Service not found for release {release_name}")
+
+            self.docker_service.login_to_registry()
 
             image_name = self.docker_service.build_and_push_image(repo_path, run_id)
 
             self.setup_kubernetes_resources(temp_user_id, date, run_id, run_meta)
-            log(f"Kubernetes resources created for {run_id}")
 
             env_vars = self.prepare_environment_variables(service_name, release_name)
-            log(f"Environment variables prepared for {run_id}, env_vars: {env_vars}")
 
             pv = self.kubernetes_service.get_pv_by_helm_release(release_name)
             if not pv:
-                log(f"PV not found for release {release_name}", "WARNING")
                 raise Exception(f"PV not found for release {release_name}")
-            log(f"PV found for {release_name}")
 
             pvc_name = f"pvc-storage-{release_name}"
             namespace = f"secd-{run_id}"
             self.kubernetes_service.create_persistent_volume_claim(pvc_name, namespace, release_name, storage_size="100Gi")
-            log(f"PVC created for {run_id}")
 
             self.create_kubernetes_pod(run_id, keycloak_user_id,image_name, run_meta, env_vars, pvc_name, namespace)
 
@@ -81,9 +74,8 @@ class HookService:
             log(f"Error in create process: {str(e)}", "ERROR")
 
         finally:
-            if user_have_permission:
-                self.keycloak_service.delete_temp_user(temp_user_id)
-                log(f"Temp user deleted: {temp_user_id}")
+            self.keycloak_service.delete_temp_user(temp_user_id)
+            log(f"Temp user deleted: {temp_user_id}")
 
     def check_user_permissions(self, keycloak_user_id: str) -> bool:
         has_role = self.keycloak_service.check_user_has_role(keycloak_user_id, "database-service", "mysql_test")
@@ -111,7 +103,8 @@ class HookService:
         pvc_repo_path = get_settings()['k8s']['pvcPath']
         self.kubernetes_service.create_namespace(tmp_user_id, run_id, run_meta['runfor'])
         self.kubernetes_service.create_persistent_volume(run_id, f'{pvc_repo_path}/repos/{run_id}/outputs/{date}-{run_id}')
-        log(f"Namespace and output volume created for {run_id}")
+        log(f"Kubernetes resources created for {run_id}")
+
 
     def prepare_environment_variables(self, service_name: str, release_name: str) -> Dict[str, str]:
         secret_name = f"secret-{release_name}"
@@ -125,6 +118,7 @@ class HookService:
             "OUTPUT_PATH": '/output',
             "SECD": 'PRODUCTION'
         }
+        log(f"Environment variables prepared: {env_vars}")
         return env_vars
 
     def create_kubernetes_pod(self, run_id: str, keycloak_user_id: str, image_name: str, run_meta: Dict, env_vars: Dict[str, str], pvc_name: str, namespace: str):

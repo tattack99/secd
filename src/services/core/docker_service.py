@@ -10,15 +10,9 @@ class DockerService:
 
     def build_image(self, repo_path, image_name):
         try:
-            #log(f"Building image {image_name} at {repo_path}")
+            log(f"repo_path: {repo_path}, image_name: {image_name}")
             self.client.images.build(path=repo_path, tag=image_name)
-            #log(f"Image {image_name} built successfully")
-        except docker.errors.BuildError as e:
-            log(f"Build error for image {image_name}: {str(e)}", "ERROR")
-            raise Exception(f"Build error for image {image_name}: {e}")
-        except docker.errors.APIError as e:
-            log(f"Docker API error while building image {image_name}: {str(e)}", "ERROR")
-            raise Exception(f"Docker API error while building image {image_name}: {e}")
+            log(f"Image {image_name} built")
         except Exception as e:
             log(f"Unexpected error building image {image_name}: {str(e)}", "ERROR")
             raise Exception(f"Unexpected error building image {image_name}: {e}")
@@ -26,10 +20,8 @@ class DockerService:
     def build_and_push_image(self, repo_path, run_id):
         try:
             image_name = self.generate_image_name(run_id)
-            log(f"Image name: {image_name}")
             self.build_image(repo_path, image_name)
-            self.push_and_remove_image(image_name)
-            log(f"Image {image_name} built and pushed")
+            self.push_image(image_name)
             return image_name
         except Exception as e:
             log(f"Failed to build and push image {image_name}: {str(e)}", "ERROR")
@@ -49,9 +41,6 @@ class DockerService:
             password = self.reg_settings.get("password")
             self.client.login(username=username, password=password, registry=url)
             log(f"Logged in to registry {url} successfully")
-        except docker.errors.APIError as e:
-            log(f"Docker API error while logging into registry {url}: {str(e)}", "ERROR")
-            raise Exception(f"Docker API error while logging into registry {url}: {e}")
         except Exception as e:
             log(f"Unexpected error logging into registry {url}: {str(e)}", "ERROR")
             raise Exception(f"Unexpected error logging into registry {url}: {e}")
@@ -59,10 +48,7 @@ class DockerService:
     def push_image(self, image_name):
         try:
             self.client.images.push(image_name)
-            log(f"Image {image_name} pushed successfully")
-        except docker.errors.APIError as e:
-            log(f"Docker API error while pushing image {image_name}: {str(e)}", "ERROR")
-            raise Exception(f"Docker API error while pushing image {image_name}: {e}")
+            log(f"Image {image_name} pushed")
         except Exception as e:
             log(f"Unexpected error pushing image {image_name}: {str(e)}", "ERROR")
             raise Exception(f"Unexpected error pushing image {image_name}: {e}")
@@ -71,9 +57,6 @@ class DockerService:
         try:
             self.client.images.remove(image_name)
             log(f"Image {image_name} removed successfully")
-        except docker.errors.APIError as e:
-            log(f"Docker API error while removing image {image_name}: {str(e)}", "ERROR")
-            raise Exception(f"Docker API error while removing image {image_name}: {e}")
         except Exception as e:
             log(f"Unexpected error removing image {image_name}: {str(e)}", "ERROR")
             raise Exception(f"Unexpected error removing image {image_name}: {e}")
@@ -83,17 +66,5 @@ class DockerService:
             for image in self.client.images.list():
                 if not image.tags:
                     self.client.images.remove(image.id)
-        except docker.errors.APIError as e:
-            log(f"Docker API error while removing dangling images: {str(e)}", "ERROR")
         except Exception as e:
             log(f"Unexpected error while removing dangling images: {str(e)}", "ERROR")
-
-    def push_and_remove_image(self, image_name):
-        try:
-            self.login_to_registry()
-            self.push_image(image_name)
-            self.remove_image(image_name)
-            self.remove_dangling()
-        except Exception as e:
-            log(f"Failed to push and remove image {image_name}: {str(e)}", "ERROR")
-            raise Exception(f"Failed to push and remove image {image_name}: {e}")

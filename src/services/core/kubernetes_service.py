@@ -11,9 +11,19 @@ from app.src.util.logger import log
 class KubernetesService:
     def __init__(self) -> None:
         self.config_path = get_settings()['k8s']['configPath']
-        config.load_kube_config(self.config_path)
-        self.v1 = client.CoreV1Api()
-        self.apps_v1 = client.AppsV1Api()
+        self.config = client.Configuration()
+        
+        # Load kubeconfig into the custom configuration
+        config.load_kube_config(config_file=self.config_path, client_configuration=self.config)
+        
+        # Set the correct host (adjust based on your setup)
+        self.config.host = "https://192.168.0.11:16443"
+        self.config.verify_ssl = False
+        
+        # Pass the configuration to the API client
+        api_client = client.ApiClient(configuration=self.config)
+        self.v1 = client.CoreV1Api(api_client=api_client)
+        self.apps_v1 = client.AppsV1Api(api_client=api_client)
 
     def get_secret(self, namespace, secret_name, key):
         #log(f"Fetching secret {secret_name} in namespace {namespace}")
@@ -77,20 +87,18 @@ class KubernetesService:
                     pod_name = pod.metadata.name
                     log(f"Pod '{pod_name}' matches Helm release '{release_name}'.")
                     return pod
+                
+            return None  # Return None if no matching pod is found
 
-            raise Exception(f"No pod found for Helm release '{release_name}' in namespace '{namespace}'.")
-
-        except ApiException as e:
+        except Exception as e:
             log(f"Failed to get pod for Helm release '{release_name}' in namespace '{namespace}': {e}", "ERROR")
             raise Exception(f"Failed to get pod for Helm release '{release_name}' in namespace '{namespace}': {e}")
 
     def get_service_by_helm_release(self, release_name: str, namespace: str):
         try:
-            #log(f"Searching for service with Helm release name '{release_name}' in namespace '{namespace}'.")
 
             # List all services in the specified namespace
             services = self.v1.list_namespaced_service(namespace=namespace)
-            #log(f"Found {len(services.items)} services in namespace '{namespace}'.")
 
             for service in services.items:
                 # Access the labels dictionary
@@ -102,20 +110,18 @@ class KubernetesService:
 
                 if release_label == release_name:
                     service_name = service.metadata.name
-                    #log(f"Service '{service_name}' matches Helm release '{release_name}'.")
+                    log(f"Service '{service_name}' matches Helm release '{release_name}'.")
 
                     # Construct the FQDN for the service
                     service_fqdn = f"{service_name}.{namespace}.svc.cluster.local"
                     return service_fqdn
 
-            raise Exception(f"No service found for Helm release '{release_name}' in namespace '{namespace}'.", "WARNING")
-            #log(f"No service found for Helm release '{release_name}' in namespace '{namespace}'.", "WARNING")
-            #return None  # Return None if no matching service is found
+            log(f"No service found for Helm release '{release_name}' in namespace '{namespace}'.", "WARNING")
+            return None  # Return None if no matching service is found
 
-        except ApiException as e:
+        except Exception as e:
             log(f"Failed to get service for Helm release '{release_name}' in namespace '{namespace}': {e}", "ERROR")
             raise Exception(f"Failed to get service for Helm release '{release_name}' in namespace '{namespace}': {e}")
-
 
 
     def get_pod_by_name(self, namespace: str, pod_name: str):
@@ -175,6 +181,7 @@ class KubernetesService:
         )
 
         self.v1.create_namespace(body=namespace)
+        log(f"Namespace {namespace_name} created")
 
     def create_persistent_volume_claim(self, pvc_name, namespace, release_name, storage_size="100Gi"):
         pvc_manifest = {
@@ -426,7 +433,7 @@ class KubernetesService:
         )
 
         v1.create_persistent_volume(body=pv)
-        #log(f"Persistent volume {pv_name} created")
+        log(f"PV {pv_name} created")
 
         pvc = client.V1PersistentVolumeClaim(
             metadata=client.V1ObjectMeta(name=pvc_name),
@@ -440,7 +447,7 @@ class KubernetesService:
         )
 
         v1.create_namespaced_persistent_volume_claim(body=pvc, namespace=f"secd-{run_id}")
-        #log(f"Persistent volume claim {pvc_name} created in namespace secd-{run_id}")
+        log(f"PVC {pvc_name} created in namespace secd-{run_id}")
 
     def get_pv_by_helm_release(self, release_name: str):
         try:
@@ -462,16 +469,20 @@ class KubernetesService:
             log(f"No PV found with release name '{release_name}'", "WARNING")
             return None
 
-        except ApiException as e:
+        except Exception as e:
             # Log and raise exception if API call fails
             log(f"Failed to get PV by Helm release '{release_name}': {e}", "ERROR")
             raise Exception(f"Failed to get PV by Helm release '{release_name}': {e}")
 
 
     def cleanup_resources(self) -> List[str]:
+        log("Cleaning up resources...")
         run_ids = []
 
+        log("Listing namespaces...")
         namespaces = self.v1.list_namespace()
+        #log(f"Found {len(namespaces.items)} namespaces")
+
         for namespace in namespaces.items:
             if self._should_cleanup_namespace(namespace):
                 run_id = self._cleanup_namespace(namespace)
@@ -547,7 +558,6 @@ class KubernetesService:
             try:
                 pv = self.v1.read_persistent_volume(pv_name)
                 if pv.status.phase == "Released":
-                    log(f"Releasing PV {pv_name} for new claims.")
                     self.v1.patch_persistent_volume(
                         name=pv_name,
                         body={"spec": {"claimRef": None}}
@@ -580,7 +590,6 @@ class KubernetesService:
 
     def _delete_persistent_volume(self, namespace_name: str):
         try:
-            log(f"Attempting to delete persistent volume: {namespace_name}-output")
             self.v1.delete_persistent_volume(name=f'{namespace_name}-output')
             log(f"Persistent volume {namespace_name}-output deleted")
         except Exception as e:
@@ -599,7 +608,7 @@ class KubernetesService:
         log(f"Finishing run {namespace.metadata.name} - Deleting resources")
 
         self._delete_namespace(namespace.metadata.name)
-        self._delete_persistent_volume(namespace.metadata.name)
+        #self._delete_persistent_volume(namespace.metadata.name)
 
         # Get lists of PVCs and PVs
         pvc_name_list = self._get_pvc_names(namespace.metadata.name)

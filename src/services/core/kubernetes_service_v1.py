@@ -7,9 +7,11 @@ from src.services.core.protocol.kubernetes_service_protocol import KubernetesSer
 
 class KubernetesServiceV1(KubernetesServiceProtocol):
     def __init__(self) -> None:
+        log("Instantiating Kubernetes service v1")
         self.config_path = get_settings()['k8s']['configPath']
         config.load_kube_config(self.config_path)
         self.v1 = client.CoreV1Api()
+        log("Kubernetes service v1 instantiated")
 
     def create_namespace(self) -> None:
         raise NotImplementedError

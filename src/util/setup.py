@@ -34,10 +34,11 @@ def load_settings(config_path=None):
     with open(schema_path, 'r') as schema_file:
         schema = yaml.load(schema_file, Loader=yaml.FullLoader)
 
+    """
     v = Validator(schema) # type: ignore
     if not v.validate(loaded_yaml): # type: ignore
         log(f'Invalid config file: {v.errors}', "ERROR")
         raise Exception(f'Invalid config file: {v.errors}') # type: ignore
-
+    """
     global settings
     settings = loaded_yaml

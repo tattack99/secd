@@ -10,7 +10,7 @@ from app.src.services.core.keycloak_service import KeycloakService
 from app.src.services.core.kubernetes_service import KubernetesService
 from app.src.util.daemon import Daemon
 from app.src.services.resource.hook_service import HookService
-from src.services.core.kubernetes_service_v1 import KubernetesServiceV1
+from app.src.services.core.kubernetes_service_v1 import KubernetesServiceV1
 
 class Server:
     def __init__(self):
@@ -25,7 +25,7 @@ class Server:
         self.docker_service = DockerService()
         self.kubernetes_service = KubernetesService()
         self.gitlab_service = GitlabService()
-        self.kubernetes_service_v1 = KubernetesServiceV1()
+        #self.kubernetes_service_v1 = KubernetesServiceV1()
 
         # Instantiate resources services
         self.hook_service = HookService(

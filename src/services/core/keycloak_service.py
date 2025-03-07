@@ -14,7 +14,7 @@ class KeycloakService:
             password=self.kc_settings['password'],
             realm_name=self.kc_settings['realm'],
             client_id=self.kc_settings['admin-cli']['client_id'],
-            verify=True)
+            verify=False)
         self.keycloak_admin = KeycloakAdmin(connection=keycloak_connection)
 
         self.keycloak_openid = KeycloakOpenID(
