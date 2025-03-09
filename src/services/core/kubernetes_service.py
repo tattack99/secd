@@ -207,7 +207,7 @@ class KubernetesService:
 
 
 
-    def _create_volume(self, volume_name: str, claim_name: str) -> client.V1Volume:
+    def _create_volume(self, volume_name: str, claim_name: str, read_only : bool = False ) -> client.V1Volume:
         try:
             if not volume_name:
                 raise ValueError("Volume name cannot be empty")
@@ -218,7 +218,7 @@ class KubernetesService:
                 name=volume_name,
                 persistent_volume_claim=client.V1PersistentVolumeClaimVolumeSource(
                     claim_name=claim_name,
-                    read_only=True
+                    read_only=read_only
                 )
             )
             return volume
@@ -247,7 +247,8 @@ class KubernetesService:
         return client.V1PodSpec(
             volumes=volumes,
             containers=containers,
-            restart_policy="Never"
+            restart_policy="Never",
+            #image_pull_secrets = [client.V1LocalObjectReference(name="harbor-secret")]
         )
 
     def _create_container(self, name: str, image: str, envs: List[client.V1EnvVar], volume_mounts: List[client.V1VolumeMount], resources: client.V1ResourceRequirements) -> client.V1Container:
@@ -316,7 +317,7 @@ class KubernetesService:
             volume_mounts: List[client.V1VolumeMount] = []
 
             # Use the specified PVC for NFS storage
-            volumes.append(self._create_volume(pvc_name, pvc_name))
+            volumes.append(self._create_volume(pvc_name, pvc_name, read_only=True))
             volume_mounts.append(self._create_mount(pvc_name, "/data", read_only=True))  # Set read-only if needed
 
             # Create additional volumes and mounts for output and cache directories
@@ -476,10 +477,8 @@ class KubernetesService:
 
 
     def cleanup_resources(self) -> List[str]:
-        log("Cleaning up resources...")
         run_ids = []
 
-        log("Listing namespaces...")
         namespaces = self.v1.list_namespace()
         #log(f"Found {len(namespaces.items)} namespaces")
 
@@ -504,9 +503,6 @@ class KubernetesService:
         return datetime.datetime.fromisoformat(rununtil) < datetime.datetime.now()
 
     def _get_pvc_names(self, namespace_name: str) -> List[str]:
-        """
-        Retrieves all PVC names in the given namespace.
-        """
         pvc_name_list = []
         try:
             pvc_list = self.v1.list_namespaced_persistent_volume_claim(namespace=namespace_name)
@@ -517,9 +513,6 @@ class KubernetesService:
         return pvc_name_list
 
     def _get_pv_name_from_any_pvc(self, namespace_name: str) -> List[str]:
-        """
-        Retrieves the PV names associated with all PVCs in the given namespace.
-        """
         pv_name_list = []
         try:
             # List all PVCs in the namespace

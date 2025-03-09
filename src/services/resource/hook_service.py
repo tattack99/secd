@@ -27,55 +27,94 @@ class HookService:
         try:
             log("Starting create process...")
             user_have_permission = False
+            log("Validating request body...")
             self.gitlab_service.validate_body(body)
             gitlab_user_id = body['user_id']
+            log(f"Extracted gitlab_user_id: {gitlab_user_id}")
 
+            log(f"Retrieving Keycloak user ID for gitlab_user_id: {gitlab_user_id}")
             keycloak_user_id = self.gitlab_service.get_idp_user_id(gitlab_user_id)
-            user_in_group = self.keycloak_service.check_user_in_group(keycloak_user_id, "secd") # All user must be in secd to access
-            if not user_in_group:
-                log("User is not in the group.")
-                raise Exception("User is not in the group.")
+            log(f"Keycloak user ID retrieved: {keycloak_user_id}")
 
+            log(f"Checking if user {keycloak_user_id} is in 'secd' group")
+            user_in_group = self.keycloak_service.check_user_in_group(keycloak_user_id, "secd")
+            if not user_in_group:
+                log(f"User {keycloak_user_id} is not in the 'secd' group")
+                raise Exception("User is not in the group.")
+            log(f"User {keycloak_user_id} is in 'secd' group")
+
+            log("Preparing repository and paths...")
             run_id, repo_path, output_path, date = self.prepare_repository_and_paths(body)
+            log(f"Prepared: run_id={run_id}, repo_path={repo_path}, output_path={output_path}, date={date}")
+
+            log(f"Retrieving metadata from {repo_path}/secd.yml")
             run_meta = self.gitlab_service.get_metadata(f"{repo_path}/secd.yml")
             release_name = run_meta['database']
+            log(f"Metadata retrieved, release_name: {release_name}")
 
+            log(f"Checking if user {keycloak_user_id} has role for release {release_name}")
             has_role = self.keycloak_service.check_user_has_role(keycloak_user_id, "database-service", release_name)
             if not has_role:
-                log(f"Keycloak user: {keycloak_user_id}, does not have the required role: {release_name}.")
+                log(f"Keycloak user {keycloak_user_id} does not have required role: {release_name}")
                 raise Exception("User does not have the required role.")
+            log(f"User {keycloak_user_id} has required role for {release_name}")
 
-
+            log("Creating temporary user...")
             temp_user_id, temp_user_password = self.create_temp_user(keycloak_user_id)
+            log(f"Temporary user created: temp_user_id={temp_user_id}")
 
+            log(f"Fetching service for release {release_name} with type 'storage'")
             service_name = self.kubernetes_service.get_service_by_helm_release(release_name, "storage")
             if not service_name:
+                log(f"No service found for release {release_name}")
                 raise Exception(f"Service not found for release {release_name}")
+            log(f"Service name retrieved: {service_name}")
 
+            log("Logging into Docker registry...")
             self.docker_service.login_to_registry()
+            log("Docker registry login successful")
 
+            log(f"Building and pushing Docker image from {repo_path} with run_id {run_id}")
             image_name = self.docker_service.build_and_push_image(repo_path, run_id)
+            log(f"Docker image built and pushed: {image_name}")
 
+            log("Setting up Kubernetes resources...")
             self.setup_kubernetes_resources(temp_user_id, date, run_id, run_meta)
+            log("Kubernetes resources set up successfully")
 
+            log("Preparing environment variables...")
             env_vars = self.prepare_environment_variables(service_name, release_name)
+            log(f"Environment variables prepared: {env_vars}")
 
+            log(f"Retrieving PV for release {release_name}")
             pv = self.kubernetes_service.get_pv_by_helm_release(release_name)
             if not pv:
+                log(f"No PV found for release {release_name}")
                 raise Exception(f"PV not found for release {release_name}")
+            log(f"PV retrieved: {pv}")
 
             pvc_name = f"pvc-storage-{release_name}"
             namespace = f"secd-{run_id}"
+            log(f"Creating PVC {pvc_name} in namespace {namespace}")
             self.kubernetes_service.create_persistent_volume_claim(pvc_name, namespace, release_name, storage_size="100Gi")
+            log("PVC created successfully")
 
-            self.create_kubernetes_pod(run_id, keycloak_user_id,image_name, run_meta, env_vars, pvc_name, namespace)
+            log(f"Creating Kubernetes pod for run_id {run_id}")
+            self.create_kubernetes_pod(run_id, keycloak_user_id, image_name, run_meta, env_vars, pvc_name, namespace)
+            log("Kubernetes pod created successfully")
 
         except Exception as e:
             log(f"Error in create process: {str(e)}", "ERROR")
+            raise  # Re-raise to ensure proper error handling upstream
 
         finally:
-            self.keycloak_service.delete_temp_user(temp_user_id)
-            log(f"Temp user deleted: {temp_user_id}")
+            # Initialize temp_user_id to None outside the try block to avoid reference errors
+            if 'temp_user_id' in locals() and temp_user_id:
+                log(f"Attempting to delete temp user: {temp_user_id}")
+                self.keycloak_service.delete_temp_user(temp_user_id)
+                log(f"Temp user deleted: {temp_user_id}")
+            else:
+                log("No temp user to delete (temp_user_id not set)")
 
     def check_user_permissions(self, keycloak_user_id: str) -> bool:
         has_role = self.keycloak_service.check_user_has_role(keycloak_user_id, "database-service", "mysql_test")

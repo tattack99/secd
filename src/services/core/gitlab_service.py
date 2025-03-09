@@ -13,7 +13,6 @@ from app.src.util.setup import get_settings
 
 class GitlabService:
     def __init__(self):
-        log ("Initializing GitLab service")
         self.glSettings = get_settings()['gitlab']
         self.client = gitlab.Gitlab(
             url = self.glSettings['url'],
