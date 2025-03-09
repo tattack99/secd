@@ -3,12 +3,13 @@ import os
 from typing import Dict
 import uuid
 
+from app.src.services.implementation.kubernetes_service_v1 import KubernetesServiceV1
 from src.util.logger import log
 from src.util.setup import get_settings
-from src.services.core.gitlab_service import GitlabService
-from src.services.core.keycloak_service import KeycloakService
-from src.services.core.docker_service import DockerService
-from src.services.core.kubernetes_service import KubernetesService
+from app.src.services.implementation.gitlab_service import GitlabService
+from app.src.services.implementation.keycloak_service import KeycloakService
+from app.src.services.implementation.docker_service import DockerService
+from app.src.services.implementation.kubernetes_service import KubernetesService
 
 class HookService:
     def __init__(
@@ -16,7 +17,7 @@ class HookService:
         gitlab_service : GitlabService,
         keycloak_service : KeycloakService,
         docker_service : DockerService,
-        kubernetes_service : KubernetesService):
+        kubernetes_service : KubernetesServiceV1):
 
         self.gitlab_service = gitlab_service
         self.keycloak_service = keycloak_service
@@ -87,17 +88,37 @@ class HookService:
             log(f"Environment variables prepared: {env_vars}")
 
             log(f"Retrieving PV for release {release_name}")
-            pv = self.kubernetes_service.get_pv_by_helm_release(release_name)
+            pv = self.kubernetes_service.pv_service.get_pv_by_helm_release(release_name)
             if not pv:
                 log(f"No PV found for release {release_name}")
                 raise Exception(f"PV not found for release {release_name}")
             log(f"PV retrieved: {pv}")
 
+            # Create NFS storage PVC
             pvc_name = f"pvc-storage-{release_name}"
             namespace = f"secd-{run_id}"
+            volume_name_nfs = f"pv-storage-{release_name}"  # PV name for NFS storage
             log(f"Creating PVC {pvc_name} in namespace {namespace}")
-            self.kubernetes_service.create_persistent_volume_claim(pvc_name, namespace, release_name, storage_size="100Gi")
+            self.kubernetes_service.pv_service.create_persistent_volume_claim(
+                pvc_name,
+                namespace,
+                volume_name_nfs,  # Pass the correct PV name
+                storage_size="100Gi"
+            )
             log("PVC created successfully")
+
+            # Create output PVC
+            output_pvc_name = f"secd-pvc-{run_id}-output"
+            volume_name_output = f"secd-{run_id}-output"  # PV name for output
+            log(f"Creating PVC {output_pvc_name} in namespace {namespace}")
+            self.kubernetes_service.pv_service.create_persistent_volume_claim(
+                output_pvc_name,
+                namespace,
+                volume_name_output,  # Pass the correct PV name
+                storage_size="50Gi",
+                access_modes=["ReadWriteOnce"]
+            )
+            log("Output PVC created successfully")
 
             log(f"Creating Kubernetes pod for run_id {run_id}")
             self.create_kubernetes_pod(run_id, keycloak_user_id, image_name, run_meta, env_vars, pvc_name, namespace)
@@ -141,7 +162,9 @@ class HookService:
     def setup_kubernetes_resources(self, tmp_user_id: str, date:str, run_id: str, run_meta: Dict):
         pvc_repo_path = get_settings()['k8s']['pvcPath']
         self.kubernetes_service.create_namespace(tmp_user_id, run_id, run_meta['runfor'])
-        self.kubernetes_service.create_persistent_volume(run_id, f'{pvc_repo_path}/repos/{run_id}/outputs/{date}-{run_id}')
+        pv_name = f'secd-{run_id}-output'
+
+        self.kubernetes_service.pv_service.create_persistent_volume(pv_name, f'{pvc_repo_path}/repos/{run_id}/outputs/{date}-{run_id}')
         log(f"Kubernetes resources created for {run_id}")
 
 
@@ -167,7 +190,7 @@ class HookService:
         db_pod = self.kubernetes_service.get_pod_by_helm_release(release_name=release_name, namespace="storage")
         db_label = db_pod.metadata.labels.get('database', '')
 
-        self.kubernetes_service.create_pod_v1(
+        self.kubernetes_service.pod_service.create_pod(
             run_id=run_id,
             image=image_name,
             envs=env_vars,

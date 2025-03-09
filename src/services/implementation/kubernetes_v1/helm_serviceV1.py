@@ -1,0 +1,20 @@
+from kubernetes import client, config
+from app.src.util.setup import get_settings
+from app.src.util.logger import log
+from app.src.services.protocol.kubernetes.helm_service_protocol import HelmServiceProtocol
+from typing import Optional
+
+class HelmServiceV1(HelmServiceProtocol):
+    def __init__(self, config: client.Configuration):   
+        api_client = client.ApiClient(configuration=config)
+        self.v1 = client.CoreV1Api(api_client=api_client)
+
+    def get_service_by_helm_release(self, release_name: str, namespace: str) -> Optional[str]:
+        services = self.v1.list_namespaced_service(namespace).items
+        for service in services:
+            labels = service.metadata.labels or {}
+            if labels.get('release') == release_name:
+                service_fqdn = f"{service.metadata.name}.{namespace}.svc.cluster.local"
+                log(f"Service '{service.metadata.name}' matches Helm release '{release_name}'.")
+                return service_fqdn
+        return None

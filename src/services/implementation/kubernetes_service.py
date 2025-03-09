@@ -17,7 +17,6 @@ class KubernetesService:
         config.load_kube_config(config_file=self.config_path, client_configuration=self.config)
         
         # Set the correct host (adjust based on your setup)
-        self.config.host = "https://192.168.0.11:16443"
         self.config.verify_ssl = False
         
         # Pass the configuration to the API client

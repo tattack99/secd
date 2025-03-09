@@ -3,7 +3,7 @@ import json
 import threading
 import gitlab
 
-from app.src.services.resource.hook_service import HookService
+from app.src.resources.hook_service import HookService
 from app.src.util.logger import log
 from app.src.util.setup import get_settings
 

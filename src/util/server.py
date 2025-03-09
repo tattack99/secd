@@ -1,16 +1,23 @@
 import falcon
 import threading
 from wsgiref.simple_server import make_server
-from app.src.util.setup import load_settings
+from app.src.services.implementation.kubernetes_service_v1 import KubernetesServiceV1
+from app.src.services.implementation.kubernetes_v1.helm_serviceV1 import HelmServiceV1
+from app.src.services.implementation.kubernetes_v1.namespace_serviceV1 import NamespaceServiceV1
+from app.src.services.implementation.kubernetes_v1.persistent_volume_serviceV1 import PersistentVolumeServiceV1
+from app.src.services.implementation.kubernetes_v1.pod_serviceV1 import PodServiceV1
+from app.src.services.implementation.kubernetes_v1.secret_serviceV1 import SecretServiceV1
+from app.src.util.setup import load_settings, get_settings
 from app.src.util.logger import log
 from app.src.resources.hook_resource import HookResource
-from app.src.services.core.docker_service import DockerService
-from app.src.services.core.gitlab_service import GitlabService
-from app.src.services.core.keycloak_service import KeycloakService
-from app.src.services.core.kubernetes_service import KubernetesService
+from app.src.services.implementation.docker_service import DockerService
+from app.src.services.implementation.gitlab_service import GitlabService
+from app.src.services.implementation.keycloak_service import KeycloakService
+from app.src.services.implementation.kubernetes_service import KubernetesService
+
 from app.src.util.daemon import Daemon
-from app.src.services.resource.hook_service import HookService
-from app.src.services.core.kubernetes_service_v1 import KubernetesServiceV1
+from app.src.resources.hook_service import HookService
+from kubernetes import client, config
 
 class Server:
     def __init__(self):
@@ -20,18 +27,19 @@ class Server:
         self.apps = []
         self.threads = []
 
+        self.init_kubernetesV1()
+
         # Instantiate core services
         self.keycloak_service = KeycloakService()
         self.docker_service = DockerService()
         self.kubernetes_service = KubernetesService()
         self.gitlab_service = GitlabService()
-        #self.kubernetes_service_v1 = KubernetesServiceV1()
 
         # Instantiate resources services
         self.hook_service = HookService(
             keycloak_service=self.keycloak_service,
             gitlab_service=self.gitlab_service,
-            kubernetes_service=self.kubernetes_service,
+            kubernetes_service=self.kubernetes_service_v1,
             docker_service=self.docker_service,
         )
 
@@ -58,7 +66,7 @@ class Server:
     def run(self):
         log("Running server...")
         try:
-            microk8s_cleanup = Daemon(self.kubernetes_service, self.gitlab_service)
+            microk8s_cleanup = Daemon(self.kubernetes_service_v1, self.gitlab_service)
             microk8s_cleanup_thread = threading.Thread(target=microk8s_cleanup.start_microk8s_cleanup)
             microk8s_cleanup_thread.start()
 
@@ -74,3 +82,24 @@ class Server:
 
         except Exception as e:
             log(f"Error starting Daemon thread: {e}", "ERROR")
+    
+    def init_kubernetesV1(self):
+        self.config_path = get_settings()['k8s']['configPath']
+        self.config = client.Configuration()
+        config.load_kube_config(config_file=self.config_path, client_configuration=self.config)
+ 
+        self.config.verify_ssl = False
+
+        namespace_service = NamespaceServiceV1(config=self.config)    
+        pv_service = PersistentVolumeServiceV1(config=self.config)
+        pod_service = PodServiceV1(config=self.config)
+        secret_service = SecretServiceV1(config=self.config)
+        helm_service = HelmServiceV1(config=self.config)
+
+        self.kubernetes_service_v1 = KubernetesServiceV1(
+            namespace_service=namespace_service,
+            pod_service=pod_service,
+            pv_service=pv_service,
+            secret_service=secret_service,
+            service_service=helm_service,
+        )
