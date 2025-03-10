@@ -24,8 +24,8 @@ class NamespaceServiceV1(NamespaceServiceProtocol):
             log(f"Failed to get namespace {name}: {e}", "ERROR")
             return None
 
-    def list_namespaces(self) -> List[client.V1Namespace]:
-        return self.v1.list_namespace().items
+    def get_namespaces(self) -> List[client.V1Namespace]:
+        return self.v1.list_namespace()
 
     def delete_namespace(self, name: str) -> None:
         try:
@@ -35,10 +35,9 @@ class NamespaceServiceV1(NamespaceServiceProtocol):
         except client.ApiException as e:
             log(f"Failed to delete namespace {name}: {e}", "ERROR")
 
-    def cleanup_namespaces(self) -> List[str]:
+    def cleanup_namespaces(self, namespaces) -> List[str]:
         run_ids = []
-        namespaces = self.v1.list_namespace()
-        for namespace in namespaces.items:
+        for namespace in namespaces:
             if self._should_cleanup_namespace(namespace):
                 run_id = self._cleanup_namespace(namespace)
                 run_ids.append(run_id)
@@ -55,8 +54,9 @@ class NamespaceServiceV1(NamespaceServiceProtocol):
 
     def _is_pod_completed(self, namespace_name: str) -> bool:
         pod_list = self.v1.list_namespaced_pod(namespace=namespace_name)
-        if pod_list.items:
+        if len(pod_list.items) > 0:
             pod = pod_list.items[0]
+            log(f"Pod found in namespace: {namespace_name} with phase: {pod.status.phase}")
             return pod.status.phase in ['Succeeded', 'Failed']
         return False
 

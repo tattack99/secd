@@ -55,3 +55,7 @@ class PersistentVolumeServiceProtocol(Protocol):
     def get_pv_by_helm_release(self, release_name: str) -> Optional[V1PersistentVolume]:
         """Find a persistent volume by Helm release name."""
         ...
+
+    def cleanup_persistent_volumes(self, namespaces):
+        """Clean up persistent volumes."""
+        ...

@@ -1,3 +1,4 @@
+import time
 from kubernetes import client, config
 from app.src.util.setup import get_settings
 from app.src.util.logger import log
@@ -8,6 +9,19 @@ class PersistentVolumeServiceV1(PersistentVolumeServiceProtocol):
     def __init__(self, config: client.Configuration):   
         api_client = client.ApiClient(configuration=config)
         self.v1 = client.CoreV1Api(api_client=api_client)
+
+    def cleanup_persistent_volumes(self, namespaces):
+        for namespace in namespaces:
+            pvc_name_list = self._get_pvc_names(namespace.metadata.name)
+            log(f"Number of PVCs in namespace {namespace.metadata.name}: {len(pvc_name_list)}")
+            pv_name_list = self._get_pv_name_from_any_pvc(namespace.metadata.name)
+            log(f"Number of PVs in namespace {namespace.metadata.name}: {len(pv_name_list)}")
+
+            if pv_name_list:
+                self._wait_for_pvc_deletion(namespace.metadata.name, pvc_name_list)
+                self._make_pv_available(pv_name_list)
+
+
 
     def create_persistent_volume(
         self,
@@ -99,3 +113,63 @@ class PersistentVolumeServiceV1(PersistentVolumeServiceProtocol):
                 log(f"Found PV for release '{release_name}': {pv.metadata.name}")
                 return pv
         return None
+    
+
+    def _wait_for_pvc_deletion(self, namespace_name: str, pvc_name_list: List[str], timeout: int = 60):
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            all_deleted = True
+            for pvc_name in pvc_name_list:
+                try:
+                    self.v1.read_namespaced_persistent_volume_claim(name=pvc_name, namespace=namespace_name)
+                    log(f"Waiting for PVC {pvc_name} in namespace {namespace_name} to be deleted...")
+                    all_deleted = False
+                except client.exceptions.ApiException as e:
+                    if e.status == 404:
+                        log(f"PVC {pvc_name} in namespace {namespace_name} has been deleted.")
+                    else:
+                        log(f"Error checking PVC {pvc_name} in namespace {namespace_name}: {e}", "ERROR")
+            if all_deleted:
+                break
+            time.sleep(5)  # Sleep for a short interval before retrying
+        if not all_deleted:
+            log(f"Timeout waiting for PVC deletion in namespace {namespace_name}.")
+
+    def _make_pv_available(self, pv_name_list: List[str]):
+        for pv_name in pv_name_list:
+            try:
+                pv = self.v1.read_persistent_volume(pv_name)
+                if pv.status.phase == "Released":
+                    self.v1.patch_persistent_volume(
+                        name=pv_name,
+                        body={"spec": {"claimRef": None}}
+                    )
+                    log(f"Persistent Volume {pv_name} is now available.")
+                else:
+                    log(f"PV {pv_name} is not in Released state. Current state: {pv.status.phase}")
+            except client.exceptions.ApiException as e:
+                log(f"Error releasing PV {pv_name}: {e}", "ERROR")
+
+    def _get_pv_name_from_any_pvc(self, namespace_name: str) -> List[str]:
+        pv_name_list = []
+        try:
+            # List all PVCs in the namespace
+            pvc_list = self.v1.list_namespaced_persistent_volume_claim(namespace=namespace_name)
+            for pvc in pvc_list.items:
+                pv_name = pvc.spec.volume_name
+                if pv_name:
+                    log(f"Found PV {pv_name} for PVC {pvc.metadata.name} in namespace {namespace_name}")
+                    pv_name_list.append(pv_name)
+        except client.exceptions.ApiException as e:
+            log(f"Failed to retrieve PV name from any PVC in namespace {namespace_name}: {e}", "ERROR")
+        return pv_name_list
+    
+    def _get_pvc_names(self, namespace_name: str) -> List[str]:
+        pvc_name_list = []
+        try:
+            pvc_list = self.v1.list_namespaced_persistent_volume_claim(namespace=namespace_name)
+            for pvc in pvc_list.items:
+                pvc_name_list.append(pvc.metadata.name)
+        except client.exceptions.ApiException as e:
+            log(f"Failed to retrieve PVC names in namespace {namespace_name}: {e}", "ERROR")
+        return pvc_name_list

@@ -46,7 +46,19 @@ class KubernetesServiceV1:
         self.namespace_service.create_namespace(namespace_name, labels, annotations)
 
     def cleanup_resources(self) -> List[str]:
-        return self.namespace_service.cleanup_namespaces()
+        secd_namespaces = []
+        run_ids = []
+        namespaces = self.namespace_service.get_namespaces()
+        for namespace in namespaces.items:
+            if namespace.metadata.name.startswith("secd-"):
+                secd_namespaces.append(namespace)
+                run_ids.append(namespace.metadata.name.replace("secd-", ""))
+        log(f"Number of secd namespaces: {len(secd_namespaces)}")
+            
+        self.namespace_service.cleanup_namespaces(secd_namespaces)
+        self.pv_service.cleanup_persistent_volumes(secd_namespaces)
+
+        return run_ids
 
     def get_secret(self, namespace: str, secret_name: str, key: str) -> Optional[str]:
         return self.secret_service.get_secret(namespace, secret_name, key)

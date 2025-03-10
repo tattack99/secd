@@ -10,7 +10,7 @@ class NamespaceServiceProtocol(Protocol):
         """Retrieve a namespace by name."""
         ...
 
-    def list_namespaces(self) -> List[V1Namespace]:
+    def get_namespaces(self) -> List[V1Namespace]:
         """List all namespaces."""
         ...
 
@@ -18,6 +18,6 @@ class NamespaceServiceProtocol(Protocol):
         """Delete a namespace by name."""
         ...
 
-    def cleanup_namespaces(self) -> List[str]:
+    def cleanup_namespaces(self, namespaces) -> List[str]:
         """Clean up namespaces based on expiration or completion status."""
         ...
