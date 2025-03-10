@@ -1,3 +1,4 @@
+import datetime
 import time
 from kubernetes import client, config
 from app.src.util.setup import get_settings
@@ -98,13 +99,13 @@ class PersistentVolumeServiceV1(PersistentVolumeServiceProtocol):
         try:
             for namespace in namespaces:
                 namespace_name = namespace.metadata.name
-                pvc_names = self._get_pvc_names(namespace_name)
-                log(f"Cleaning up {len(pvc_names)} PVCs in namespace {namespace_name}")
-                for pvc_name in pvc_names:
-                    self.delete_persistent_volume_claim(namespace_name, pvc_name)
-                self._wait_for_pvc_deletion(namespace_name, pvc_names)
-                pv_names = self._get_pv_names_from_namespace(namespace_name)
-                self._make_pv_available(pv_names)
+                if self._should_cleanup_namespace(namespace):
+                    pvc_names = self._get_pvc_names(namespace_name)
+                    log(f"Cleaning up {len(pvc_names)} PVCs in namespace {namespace_name}")
+                    for pvc_name in pvc_names:
+                        self.delete_persistent_volume_claim(namespace_name, pvc_name)
+                    pv_names = self._get_pv_names_from_namespace(namespace_name)
+                    self._make_pv_available(pv_names)
         except client.ApiException as e:
             log(f"Failed to cleanup PVs: {e}", "ERROR")
 
@@ -166,3 +167,19 @@ class PersistentVolumeServiceV1(PersistentVolumeServiceProtocol):
                     log(f"PV {pv_name} is now available")
             except client.ApiException as e:
                 log(f"Error making PV {pv_name} available: {e}", "ERROR")
+
+    def _should_cleanup_namespace(self, namespace) -> bool:
+        annotations = namespace.metadata.annotations or {}
+        if 'rununtil' not in annotations:
+            return False
+        expired = datetime.datetime.fromisoformat(annotations['rununtil']) < datetime.datetime.now()
+        completed = self._is_pod_completed(namespace.metadata.name)
+        return expired or completed
+    
+    def _is_pod_completed(self, namespace_name: str) -> bool:
+        pod_list = self.v1.list_namespaced_pod(namespace=namespace_name)
+        if len(pod_list.items) > 0:
+            pod = pod_list.items[0]
+            log(f"Pod found in namespace: {namespace_name} with phase: {pod.status.phase}")
+            return pod.status.phase in ['Succeeded', 'Failed']
+        return False

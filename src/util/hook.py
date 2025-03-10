@@ -3,11 +3,11 @@ import json
 import threading
 import gitlab
 
-from app.src.resources.hook_service import HookService
+from app.src.services.implementation.hook_v1.hook_service import HookService
 from app.src.util.logger import log
 from app.src.util.setup import get_settings
 
-class HookResource:
+class Hook:
     def __init__(self, hook_service: HookService):
         self.hook_service = hook_service
 
@@ -18,16 +18,6 @@ class HookResource:
             body = self.parse_request_body(req)
             threading.Thread(target=self.hook_service.create(body)).start()
             self.set_response(resp, falcon.HTTP_200, "success")
-        except json.JSONDecodeError as e:
-            self.handle_error(resp, falcon.HTTP_400, "Invalid body", e)
-        except gitlab.GitlabHeadError as e:
-            self.handle_error(resp, falcon.HTTP_400, str(e), e)
-        except gitlab.GitlabAuthenticationError as e:
-            self.handle_error(resp, falcon.HTTP_401, str(e), e)
-        except falcon.HTTPBadRequest as e:
-            self.handle_error(resp, falcon.HTTP_400, str(e), e)
-        except gitlab.GitlabError as e:
-            self.handle_error(resp, falcon.HTTP_404, str(e), e)
         except Exception as e:
             self.handle_error(resp, falcon.HTTP_500, "Internal server error", e)
 
@@ -41,7 +31,6 @@ class HookResource:
             return body
         except json.JSONDecodeError as e:
             log(f"Invalid body: {str(e)}", "ERROR")
-            raise json.JSONDecodeError(msg="Invalid body", doc="", pos=0)
 
     def validate_event_token(self, req):
         event = req.get_header('X-Gitlab-Event')

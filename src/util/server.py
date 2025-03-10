@@ -1,22 +1,22 @@
 import falcon
 import threading
 from wsgiref.simple_server import make_server
+from app.src.util.setup import load_settings, get_settings
+from app.src.util.logger import log
+from app.src.util.hook import Hook
 from app.src.services.implementation.kubernetes_service_v1 import KubernetesServiceV1
 from app.src.services.implementation.kubernetes_v1.helm_serviceV1 import HelmServiceV1
 from app.src.services.implementation.kubernetes_v1.namespace_serviceV1 import NamespaceServiceV1
 from app.src.services.implementation.kubernetes_v1.persistent_volume_serviceV1 import PersistentVolumeServiceV1
 from app.src.services.implementation.kubernetes_v1.pod_serviceV1 import PodServiceV1
 from app.src.services.implementation.kubernetes_v1.secret_serviceV1 import SecretServiceV1
-from app.src.util.setup import load_settings, get_settings
-from app.src.util.logger import log
-from app.src.resources.hook_resource import HookResource
 from app.src.services.implementation.docker_service import DockerService
 from app.src.services.implementation.gitlab_service import GitlabService
 from app.src.services.implementation.keycloak_service import KeycloakService
-from app.src.services.implementation.kubernetes_service import KubernetesService
+from app.src.services.implementation.old.kubernetes_service import KubernetesService
 
 from app.src.util.daemon import Daemon
-from app.src.resources.hook_service import HookService
+from app.src.services.implementation.hook_v1.hook_service import HookService
 from kubernetes import client, config
 
 class Server:
@@ -44,7 +44,7 @@ class Server:
         )
 
         # Instantiate resources
-        self.hook_resource = HookResource(
+        self.hook_resource = Hook(
             hook_service=self.hook_service
         )
 

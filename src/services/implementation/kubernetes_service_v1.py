@@ -47,15 +47,13 @@ class KubernetesServiceV1:
 
     def cleanup_resources(self) -> List[str]:
         secd_namespaces = []
-        run_ids = []
 
         namespaces = self.namespace_service.get_namespaces()
         for namespace in namespaces.items:
             if namespace.metadata.name.startswith("secd-"):
                 secd_namespaces.append(namespace)
-                run_ids.append(namespace.metadata.name.replace("secd-", ""))
 
-        self.namespace_service.cleanup_namespaces(secd_namespaces)
+        run_ids = self.namespace_service.cleanup_namespaces(secd_namespaces)
         self.pv_service.cleanup_persistent_volumes(secd_namespaces)
 
         return run_ids
