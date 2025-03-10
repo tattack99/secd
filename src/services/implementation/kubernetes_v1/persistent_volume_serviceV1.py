@@ -97,15 +97,19 @@ class PersistentVolumeServiceV1(PersistentVolumeServiceProtocol):
     # Service Methods
     def cleanup_persistent_volumes(self, namespaces: List[client.V1Namespace]) -> None:
         try:
+            #log(f"Cleaning up PVs in {len(namespaces)} namespaces")
             for namespace in namespaces:
                 namespace_name = namespace.metadata.name
                 if self._should_cleanup_namespace(namespace):
                     pvc_names = self._get_pvc_names(namespace_name)
                     log(f"Cleaning up {len(pvc_names)} PVCs in namespace {namespace_name}")
                     for pvc_name in pvc_names:
+                        pv_names = self._get_pv_names_from_namespace(namespace_name)
+                        log(f"pv_names: {pv_names}")
                         self.delete_persistent_volume_claim(namespace_name, pvc_name)
-                    pv_names = self._get_pv_names_from_namespace(namespace_name)
-                    self._make_pv_available(pv_names)
+                        self._wait_for_pvc_deletion(namespace_name, pvc_names)
+                        log(f"Cleaning up {len(pv_names)} PVs in namespace {namespace_name}")
+                        self._make_pv_available(pv_names)
         except client.ApiException as e:
             log(f"Failed to cleanup PVs: {e}", "ERROR")
 
