@@ -17,13 +17,13 @@ class KubernetesServiceV1:
         pod_service: PodServiceProtocol,
         pv_service: PersistentVolumeServiceProtocol,
         secret_service: SecretServiceProtocol,
-        service_service: HelmServiceProtocol,
+        helm_service: HelmServiceProtocol,
     ):
         self.namespace_service = namespace_service
         self.pod_service = pod_service
         self.pv_service = pv_service
         self.secret_service = secret_service
-        self.service_service = service_service
+        self.helm_service = helm_service
         self.config_path = get_settings()['k8s']['configPath']
 
     def handle_cache_dir(self, run_meta: Dict, keycloak_user_id: str, run_id: str) -> tuple[Optional[str], Optional[str]]:
@@ -48,13 +48,13 @@ class KubernetesServiceV1:
     def cleanup_resources(self) -> List[str]:
         secd_namespaces = []
         run_ids = []
+
         namespaces = self.namespace_service.get_namespaces()
         for namespace in namespaces.items:
             if namespace.metadata.name.startswith("secd-"):
                 secd_namespaces.append(namespace)
                 run_ids.append(namespace.metadata.name.replace("secd-", ""))
-        log(f"Number of secd namespaces: {len(secd_namespaces)}")
-            
+
         self.namespace_service.cleanup_namespaces(secd_namespaces)
         self.pv_service.cleanup_persistent_volumes(secd_namespaces)
 
@@ -67,4 +67,4 @@ class KubernetesServiceV1:
         return self.pod_service.get_pod_by_helm_release(release_name, namespace)
 
     def get_service_by_helm_release(self, release_name: str, namespace: str) -> Optional[str]:
-        return self.service_service.get_service_by_helm_release(release_name, namespace)
+        return self.helm_service.get_service_by_helm_release(release_name, namespace)

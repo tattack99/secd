@@ -1,5 +1,4 @@
-from kubernetes import client, config
-from app.src.util.setup import get_settings
+from kubernetes import client
 from app.src.util.logger import log
 from app.src.services.protocol.kubernetes.helm_service_protocol import HelmServiceProtocol
 from typing import Optional

@@ -101,5 +101,5 @@ class Server:
             pod_service=pod_service,
             pv_service=pv_service,
             secret_service=secret_service,
-            service_service=helm_service,
+            helm_service=helm_service,
         )

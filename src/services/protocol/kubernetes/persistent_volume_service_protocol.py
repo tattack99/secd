@@ -3,6 +3,9 @@ from kubernetes.client import V1PersistentVolume, V1PersistentVolumeClaim
 from kubernetes import client
 
 class PersistentVolumeServiceProtocol(Protocol):
+
+
+    # CRUD methods
     def create_persistent_volume(
             self,
             name: str,
@@ -52,10 +55,11 @@ class PersistentVolumeServiceProtocol(Protocol):
         """Delete a persistent volume claim."""
         ...
 
-    def get_pv_by_helm_release(self, release_name: str) -> Optional[V1PersistentVolume]:
-        """Find a persistent volume by Helm release name."""
-        ...
-
+    # Service methods
     def cleanup_persistent_volumes(self, namespaces):
         """Clean up persistent volumes."""
+        ...
+
+    def get_pv_by_helm_release(self, release_name: str) -> Optional[V1PersistentVolume]:
+        """Find a persistent volume by Helm release name."""
         ...

@@ -10,19 +10,7 @@ class PersistentVolumeServiceV1(PersistentVolumeServiceProtocol):
         api_client = client.ApiClient(configuration=config)
         self.v1 = client.CoreV1Api(api_client=api_client)
 
-    def cleanup_persistent_volumes(self, namespaces):
-        for namespace in namespaces:
-            pvc_name_list = self._get_pvc_names(namespace.metadata.name)
-            log(f"Number of PVCs in namespace {namespace.metadata.name}: {len(pvc_name_list)}")
-            pv_name_list = self._get_pv_name_from_any_pvc(namespace.metadata.name)
-            log(f"Number of PVs in namespace {namespace.metadata.name}: {len(pv_name_list)}")
-
-            if pv_name_list:
-                self._wait_for_pvc_deletion(namespace.metadata.name, pvc_name_list)
-                self._make_pv_available(pv_name_list)
-
-
-
+    # CRUD methods
     def create_persistent_volume(
         self,
         name: str,
@@ -105,6 +93,20 @@ class PersistentVolumeServiceV1(PersistentVolumeServiceProtocol):
         except client.ApiException as e:
             log(f"Failed to delete PVC {name} in namespace {namespace}: {e}", "ERROR")
 
+
+    # Service methods
+    def cleanup_persistent_volumes(self, namespaces):
+        for namespace in namespaces:
+            pvc_name_list = self._get_pvc_names(namespace.metadata.name)
+            log(f"Number of PVCs in namespace {namespace.metadata.name}: {len(pvc_name_list)}")
+            pv_name_list = self._get_pv_name_from_any_pvc(namespace.metadata.name)
+            log(f"Number of PVs in namespace {namespace.metadata.name}: {len(pv_name_list)}")
+
+            if pv_name_list:
+                self._wait_for_pvc_deletion(namespace.metadata.name, pvc_name_list)
+                self._make_pv_available(pv_name_list)
+
+
     def get_pv_by_helm_release(self, release_name: str) -> Optional[client.V1PersistentVolume]:
         pvs = self.v1.list_persistent_volume().items
         for pv in pvs:
@@ -115,6 +117,7 @@ class PersistentVolumeServiceV1(PersistentVolumeServiceProtocol):
         return None
     
 
+    # Helper methods
     def _wait_for_pvc_deletion(self, namespace_name: str, pvc_name_list: List[str], timeout: int = 60):
         start_time = time.time()
         while time.time() - start_time < timeout:
@@ -122,7 +125,7 @@ class PersistentVolumeServiceV1(PersistentVolumeServiceProtocol):
             for pvc_name in pvc_name_list:
                 try:
                     self.v1.read_namespaced_persistent_volume_claim(name=pvc_name, namespace=namespace_name)
-                    log(f"Waiting for PVC {pvc_name} in namespace {namespace_name} to be deleted...")
+                    #log(f"Waiting for PVC {pvc_name} in namespace {namespace_name} to be deleted...")
                     all_deleted = False
                 except client.exceptions.ApiException as e:
                     if e.status == 404:
