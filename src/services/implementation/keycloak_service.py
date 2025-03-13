@@ -1,4 +1,3 @@
-import json
 from keycloak import KeycloakAuthenticationError, KeycloakGetError, KeycloakAdmin, KeycloakOpenIDConnection, KeycloakPostError, KeycloakOpenID
 from typing import Dict, List
 from app.src.util.setup import get_settings

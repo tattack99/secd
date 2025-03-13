@@ -40,8 +40,9 @@ class PodServiceV1(PodServiceProtocol):
                 volume_mounts = []
 
                 # NFS storage volume (read-only)
-                volumes.append(self._create_volume(pvc_name, pvc_name, read_only=True))
-                volume_mounts.append(self._create_mount(pvc_name, "/data", read_only=True))
+                if pvc_name != "":
+                    volumes.append(self._create_volume(pvc_name, pvc_name, read_only=True))
+                    volume_mounts.append(self._create_mount(pvc_name, "/data", read_only=True))
 
                 # Output volume
                 volumes.append(self._create_volume(f"vol-{run_id}-output", f"secd-pvc-{run_id}-output"))

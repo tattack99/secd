@@ -126,10 +126,14 @@ class HookService(HookServiceProtocol):
         pvc_name = f"pvc-storage-{run_meta['database']}"
         namespace = f"secd-{run_id}"
         volume_name_nfs = f"pv-storage-{run_meta['database']}"
+
         log("Creating storage PVC...", "INFO")
-        self.kubernetes_service.pv_service.create_persistent_volume_claim(
-            pvc_name, namespace, volume_name_nfs, storage_size=STORAGE_SIZE
-        )
+        if run_meta["database_type"] == "file":
+            self.kubernetes_service.pv_service.create_persistent_volume_claim(
+                pvc_name, namespace, volume_name_nfs, storage_size=STORAGE_SIZE
+            )
+        pvc_name = ""
+        
         output_pvc_name = f"secd-pvc-{run_id}-output"
         volume_name_output = f"secd-{run_id}-output"
         log("Creating output PVC...", "INFO")
