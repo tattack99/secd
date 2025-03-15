@@ -49,3 +49,7 @@ class PodServiceProtocol(Protocol):
     def get_pod_ip(self, namespace: str, pod_name_prefix: str) -> Optional[str]:
         """Get the IP address of a pod matching a name prefix."""
         ...
+    
+    def read_namespaced_pod_log(self, name: str, namespace: str, container: str, exec_command: List[str]) -> str:
+        """Read logs from a pod."""
+        ...

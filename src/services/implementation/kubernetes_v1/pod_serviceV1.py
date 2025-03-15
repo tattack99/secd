@@ -71,6 +71,21 @@ class PodServiceV1(PodServiceProtocol):
             except Exception as e:
                 log(f"Error creating pod: {str(e)}", "ERROR")
                 raise Exception(f"Error creating pod: {e}")
+            
+    def read_namespaced_pod_log(self, name: str, namespace: str, container: str, exec_command: List[str]) -> str:
+        """Read logs from a pod."""
+        try:
+            resp = self.v1.read_namespaced_pod_log(
+                name=name,
+                namespace=namespace,
+                container=container,
+                exec_command=exec_command
+            )
+            log(f"Read logs from pod {name}", "DEBUG")
+            return resp.strip()
+        except Exception as e:
+            log(f"Error reading logs from pod {name}: {str(e)}", "ERROR")
+            raise Exception(f"Error reading logs from pod {name}: {e}")
 
     # Helper methods
     def _create_volume(self, name: str, claim_name: str, read_only: bool = False) -> client.V1Volume:

@@ -1,5 +1,5 @@
 from typing import Optional, Dict, List
-from kubernetes import client
+from kubernetes import client, stream
 from app.src.util.setup import get_settings
 from app.src.util.logger import log
 from app.src.services.protocol.kubernetes.namespace_service_protocol import NamespaceServiceProtocol
@@ -7,6 +7,8 @@ from app.src.services.protocol.kubernetes.pod_service_protocol import PodService
 from app.src.services.protocol.kubernetes.persistent_volume_service_protocol import PersistentVolumeServiceProtocol
 from app.src.services.protocol.kubernetes.secret_service_protocol import SecretServiceProtocol
 from app.src.services.protocol.kubernetes.helm_service_protocol import HelmServiceProtocol
+from app.src.services.protocol.kubernetes.service_account_service_protocol import ServiceAccountServiceProtocol
+
 import os
 import datetime
 
@@ -18,12 +20,14 @@ class KubernetesServiceV1:
         pv_service: PersistentVolumeServiceProtocol,
         secret_service: SecretServiceProtocol,
         helm_service: HelmServiceProtocol,
+        service_service: ServiceAccountServiceProtocol
     ):
         self.namespace_service = namespace_service
         self.pod_service = pod_service
         self.pv_service = pv_service
         self.secret_service = secret_service
         self.helm_service = helm_service
+        self.service_account_service = service_service
         self.config_path = get_settings()['k8s']['configPath']
 
     def handle_cache_dir(self, run_meta: Dict, keycloak_user_id: str, run_id: str) -> tuple[Optional[str], Optional[str]]:
@@ -66,3 +70,7 @@ class KubernetesServiceV1:
 
     def get_service_by_helm_release(self, release_name: str, namespace: str) -> Optional[str]:
         return self.helm_service.get_service_by_helm_release(release_name, namespace)
+
+    def create_service_account(self, name: str, namespace: str) -> None:
+        return self.service_account_service.create_service_account(name, namespace)
+    

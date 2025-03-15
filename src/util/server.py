@@ -1,6 +1,8 @@
 import falcon
 import threading
 from wsgiref.simple_server import make_server
+from app.src.services.implementation.kubernetes_v1.service_account_service_v1 import ServiceAccountServiceV1
+from app.src.services.implementation.vault_v1.vault_service_v1 import VaultServiceV1
 from app.src.util.setup import load_settings, get_settings
 from app.src.util.logger import log
 from app.src.util.hook import Hook
@@ -10,11 +12,10 @@ from app.src.services.implementation.kubernetes_v1.namespace_serviceV1 import Na
 from app.src.services.implementation.kubernetes_v1.persistent_volume_serviceV1 import PersistentVolumeServiceV1
 from app.src.services.implementation.kubernetes_v1.pod_serviceV1 import PodServiceV1
 from app.src.services.implementation.kubernetes_v1.secret_serviceV1 import SecretServiceV1
+from app.src.services.implementation.kubernetes_v1.service_account_service_v1 import ServiceAccountServiceV1
 from app.src.services.implementation.docker_service import DockerService
 from app.src.services.implementation.gitlab_service import GitlabService
 from app.src.services.implementation.keycloak_service import KeycloakService
-from app.src.services.implementation.old.kubernetes_service import KubernetesService
-
 from app.src.util.daemon import Daemon
 from app.src.services.implementation.hook_v1.hook_service import HookService
 from kubernetes import client, config
@@ -27,13 +28,12 @@ class Server:
         self.apps = []
         self.threads = []
 
-        self.init_kubernetesV1()
-
         # Instantiate core services
+        self.init_kubernetesV1()
         self.keycloak_service = KeycloakService()
         self.docker_service = DockerService()
-        self.kubernetes_service = KubernetesService()
         self.gitlab_service = GitlabService()
+        self.vault_service = VaultServiceV1()
 
         # Instantiate resources services
         self.hook_service = HookService(
@@ -41,14 +41,13 @@ class Server:
             gitlab_service=self.gitlab_service,
             kubernetes_service=self.kubernetes_service_v1,
             docker_service=self.docker_service,
+            vault_service=self.vault_service
         )
 
-        # Instantiate resources
         self.hook_resource = Hook(
             hook_service=self.hook_service
         )
 
-        # Create multiple apps
         self.create_app('/v1/hook', self.hook_resource, 8080)
 
     def create_app(self, path, resource, port):
@@ -95,6 +94,7 @@ class Server:
         pod_service = PodServiceV1(config=self.config)
         secret_service = SecretServiceV1(config=self.config)
         helm_service = HelmServiceV1(config=self.config)
+        service_service = ServiceAccountServiceV1(config=self.config)
 
         self.kubernetes_service_v1 = KubernetesServiceV1(
             namespace_service=namespace_service,
@@ -102,4 +102,5 @@ class Server:
             pv_service=pv_service,
             secret_service=secret_service,
             helm_service=helm_service,
+            service_service=service_service
         )
