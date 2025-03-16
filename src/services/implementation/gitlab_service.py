@@ -88,13 +88,13 @@ class GitlabService:
 
             try:
                 project = self.client.projects.get(project_id)
-                log(f"Successfully retrieved project {project_id}")
+                #log(f"Successfully retrieved project {project_id}")
 
                 commit = project.commits.get(commit_id)
-                log(f"Successfully retrieved commit {commit_id}")
+                #log(f"Successfully retrieved commit {commit_id}")
 
                 gpg_signature = commit.signature()
-                log(f"Successfully retrieved GPG signature for commit {commit_id}: {gpg_signature}")
+                #log(f"Successfully retrieved GPG signature for commit {commit_id}: {gpg_signature}")
 
                 return gpg_signature
 
@@ -182,7 +182,7 @@ class GitlabService:
 
     def validate_event_token(self, req):
         event = req.get_header('X-Gitlab-Event')
-        log(f"Received event: {event}")
+        #log(f"Received event: {event}")
         if event not in ['Push Hook', 'System Hook']:
             log(f"Invalid X-Gitlab-Event header: {event}", "ERROR")
             raise gitlab.GitlabHeadError(error_message='Invalid X-Gitlab-Event header', response_code=400)
@@ -230,14 +230,14 @@ class GitlabService:
             raise gitlab.GitlabError(error_message=f'Commit is not from main branch: {body["ref"]}')
 
     def validate_commits_signature(self, body):
-        log(f"Found {len(body['commits'])} commits - {body['project']['path_with_namespace']}")
+        #log(f"Found {len(body['commits'])} commits - {body['project']['path_with_namespace']}")
 
         for push_commit in body['commits']:
-            log(f"Validating commit {push_commit['id']}")
+            #log(f"Validating commit {push_commit['id']}")
 
             try:
                 signature = self.get_signature(body['project_id'], push_commit['id'])
-                log(f"Signature: {signature}")
+                #log(f"Signature: {signature}")
 
                 if signature is None:
                     raise gitlab.GitlabError(f'No signature found for commit {push_commit["id"]}')
@@ -255,7 +255,7 @@ class GitlabService:
                 log(f"General GitLab error for commit {push_commit['id']}: {e}", "ERROR")
                 raise
 
-        log(f"All {len(body['commits'])} commits have a verified signature")
+        #log(f"All {len(body['commits'])} commits have a verified signature")
 
 
     def validate_dockerfile_presence(self, body):

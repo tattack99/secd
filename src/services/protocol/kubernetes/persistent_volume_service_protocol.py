@@ -37,7 +37,6 @@ class PersistentVolumeServiceProtocol(Protocol):
     def delete_persistent_volume_claim(self, namespace: str, name: str) -> None:
         ...
 
-    # Service methods
     def cleanup_persistent_volumes(self, namespaces: List[client.V1Namespace]) -> None:
         ...
 

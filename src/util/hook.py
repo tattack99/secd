@@ -12,7 +12,7 @@ class Hook:
         self.hook_service = hook_service
 
     def on_post(self, req, resp):
-        log("POST /v1/hook request")
+        #log("POST /v1/hook request")
         try:
             self.validate_event_token(req)
             body = self.parse_request_body(req)

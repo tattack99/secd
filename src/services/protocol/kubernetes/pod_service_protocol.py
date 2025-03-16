@@ -42,6 +42,20 @@ class PodServiceProtocol(Protocol):
         """Delete a pod by name and namespace."""
         ...
 
+    def create_pod_by_vault(
+            self,
+            run_id: str,
+            image: str,
+            envs: Dict[str, str],
+            gpu: str,
+            mount_path: Optional[str],
+            database: str,
+            namespace: str,
+            pvc_name: str,
+            vault_role: str) -> None:
+        """Create a pod by name and namespace."""
+        ...
+
     def get_pod_by_helm_release(self, release_name: str, namespace: str) -> Optional[V1Pod]:
         """Find a pod by Helm release name."""
         ...

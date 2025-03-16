@@ -94,7 +94,7 @@ class Server:
         pod_service = PodServiceV1(config=self.config)
         secret_service = SecretServiceV1(config=self.config)
         helm_service = HelmServiceV1(config=self.config)
-        service_service = ServiceAccountServiceV1(config=self.config)
+        service_account_service = ServiceAccountServiceV1(config=self.config)
 
         self.kubernetes_service_v1 = KubernetesServiceV1(
             namespace_service=namespace_service,
@@ -102,5 +102,5 @@ class Server:
             pv_service=pv_service,
             secret_service=secret_service,
             helm_service=helm_service,
-            service_service=service_service
+            service_account_service=service_account_service
         )

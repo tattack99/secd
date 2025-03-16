@@ -1,10 +1,9 @@
 import datetime
 import os
-from typing import Dict, Tuple, Any
 import uuid
-from src.util.logger import log
-from src.util.setup import get_settings
-
+from typing import Dict, Optional, Tuple, Any
+from app.src.util.logger import log
+from app.src.util.setup import get_settings
 from app.src.services.implementation.kubernetes_service_v1 import KubernetesServiceV1
 from app.src.services.implementation.vault_v1.vault_service_v1 import VaultServiceV1
 from app.src.services.protocol.hook.hook_service_protocol import HookServiceProtocol
@@ -39,11 +38,15 @@ class HookService(HookServiceProtocol):
         repo_path = f"{get_settings()['path']['repoPath']}/{run_id}"
         date = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
         output_path = f"{repo_path}/outputs/{date}-{run_id}"
+
         namespace = f"secd-{run_id}"
-        service_account_name = f"secd-{run_id}"
         output_pvc_name = f"secd-pvc-{run_id}-output"
         volume_name_output = f"secd-{run_id}-output"
         temp_user_id = ""
+
+        # Vault setup variables
+        service_account_name = "karolinska-1-test"  # Hardcoded from your YAML
+        vault_role_name = "karolinska-1-role"  # Hardcoded from your YAML
 
         try:
             gitlab_user_id, keycloak_user_id = self._validate_request_and_permissions(body)
@@ -59,10 +62,19 @@ class HookService(HookServiceProtocol):
             image_name = self._handle_docker_operations(repo_path, run_id)
 
             self._create_namespace_and_pv(temp_user_id, run_id, run_meta, date, volume_name_output)
-            self._create_service_account(service_account_name, namespace)
             env_vars = self._prepare_env_vars(service_name, run_meta)
             pvc_name = self._setup_pvc(run_meta, namespace, output_pvc_name, volume_name_output)
-            self._create_pod(run_id, keycloak_user_id, image_name, run_meta, env_vars, pvc_name, namespace)
+
+            # Vault setup
+            self.kubernetes_service.create_service_account(service_account_name, namespace)
+            self.vault_service.create_kubernetes_auth_role(
+                role_name=vault_role_name,
+                service_account_name=service_account_name,
+                namespace=namespace,
+                policy="mysql-read-policy"  # Hardcoded policy name
+            )
+
+            self._create_pod(run_id, keycloak_user_id, image_name, run_meta, env_vars, pvc_name, namespace, vault_role_name)
         except Exception as e:
             log(f"Error in create process: {str(e)}", "ERROR")
             raise
@@ -120,9 +132,6 @@ class HookService(HookServiceProtocol):
             volume_name_output, f"{pvc_repo_path}/repos/{run_id}/outputs/{date}-{run_id}"
         )
 
-    def _create_service_account(self, service_account_name: str, namespace: str) -> None:
-        self.kubernetes_service.create_service_account(service_account_name, namespace)
-
     def _prepare_env_vars(self, service_name: str, run_meta: Dict[str, Any]) -> Dict[str, str]:
         secret_name = f"secret-{run_meta['database']}"
         db_user = self.kubernetes_service.get_secret(STORAGE_TYPE, secret_name, "user")
@@ -167,12 +176,13 @@ class HookService(HookServiceProtocol):
         run_meta: Dict[str, Any],
         env_vars: Dict[str, str],
         pvc_name: str,
-        namespace: str
+        namespace: str,
+        vault_role: str
     ) -> None:
         cache_dir, mount_path = self.kubernetes_service.handle_cache_dir(run_meta, keycloak_user_id, run_id)
         db_pod = self.kubernetes_service.get_pod_by_helm_release(release_name=run_meta['database'], namespace=STORAGE_TYPE)
         db_label = db_pod.metadata.labels.get('database', '')
-        self.kubernetes_service.pod_service.create_pod(
+        self.kubernetes_service.pod_service.create_pod_by_vault(
             run_id=run_id,
             image=image_name,
             envs=env_vars,
@@ -181,6 +191,7 @@ class HookService(HookServiceProtocol):
             database=db_label,
             namespace=namespace,
             pvc_name=pvc_name,
+            vault_role=vault_role
         )
 
     def _cleanup_temp_user(self, temp_user_id: str) -> None:

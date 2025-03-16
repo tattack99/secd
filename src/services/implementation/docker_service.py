@@ -39,7 +39,7 @@ class DockerService:
             url = self.reg_settings.get("url")
             username = self.reg_settings.get("username")
             password = self.reg_settings.get("password")
-            self.client.login(username=username, password=password, registry=url)
+            self.client.login(username=username, password=password, registry="http://"+url)
             log(f"Logged in to registry {url} successfully")
         except Exception as e:
             log(f"Unexpected error logging into registry {url}: {str(e)}", "ERROR")

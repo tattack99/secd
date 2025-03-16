@@ -1,5 +1,5 @@
 from typing import Optional, Dict, List
-from kubernetes import client, stream
+from kubernetes import client
 from app.src.util.setup import get_settings
 from app.src.util.logger import log
 from app.src.services.protocol.kubernetes.namespace_service_protocol import NamespaceServiceProtocol
@@ -20,14 +20,14 @@ class KubernetesServiceV1:
         pv_service: PersistentVolumeServiceProtocol,
         secret_service: SecretServiceProtocol,
         helm_service: HelmServiceProtocol,
-        service_service: ServiceAccountServiceProtocol
+        service_account_service: ServiceAccountServiceProtocol
     ):
         self.namespace_service = namespace_service
         self.pod_service = pod_service
         self.pv_service = pv_service
         self.secret_service = secret_service
         self.helm_service = helm_service
-        self.service_account_service = service_service
+        self.service_account_service = service_account_service
         self.config_path = get_settings()['k8s']['configPath']
 
     def handle_cache_dir(self, run_meta: Dict, keycloak_user_id: str, run_id: str) -> tuple[Optional[str], Optional[str]]:
@@ -57,9 +57,10 @@ class KubernetesServiceV1:
             if namespace.metadata.name.startswith("secd-"):
                 secd_namespaces.append(namespace)
 
-        run_ids = self.namespace_service.cleanup_namespaces(secd_namespaces)
         self.pv_service.cleanup_persistent_volumes(secd_namespaces)
+        self.service_account_service.cleanup_service_accounts(secd_namespaces)
 
+        run_ids = self.namespace_service.cleanup_namespaces(secd_namespaces)
         return run_ids
 
     def get_secret(self, namespace: str, secret_name: str, key: str) -> Optional[str]:
@@ -73,4 +74,4 @@ class KubernetesServiceV1:
 
     def create_service_account(self, name: str, namespace: str) -> None:
         return self.service_account_service.create_service_account(name, namespace)
-    
+        
