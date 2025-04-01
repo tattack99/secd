@@ -4,19 +4,14 @@ from app.src.services.implementation.gitlab_service import GitlabService
 from app.src.services.implementation.kubernetes_service_v1 import KubernetesServiceV1
 from app.src.util.logger import log
 
-
-
-
-
 class Daemon:
     def __init__(
             self,
             kubernetes_service : KubernetesServiceV1,
-            gitlab_service : GitlabService):
-        urllib3.disable_warnings()
+            gitlab_service : GitlabService
+        ):
         self.kubernetes_service = kubernetes_service
         self.gitlab_service = gitlab_service
-
 
     def start_microk8s_cleanup(self):
         while True:

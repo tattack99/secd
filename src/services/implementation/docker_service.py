@@ -1,12 +1,37 @@
+import os
 import docker
+import docker.tls
 import docker.errors
 from app.src.util.setup import get_settings
 from app.src.util.logger import log
 
 class DockerService:
-    def __init__(self) -> None:
-        self.client = docker.from_env()
+    def __init__(self):
+        """Initialize Docker client with CA certificate from settings for the registry."""
         self.reg_settings = get_settings()['registry']
+        self.path_registry_ca = get_settings()['registry']['ca_path']
+        try:
+            # Configure TLS if a CA certificate path is provided and valid
+            if self.path_registry_ca and os.path.exists(self.path_registry_ca):
+                tls_config = docker.tls.TLSConfig(
+                    ca_cert=self.path_registry_ca,  # Use the self-signed certificate as CA
+                    verify=True  # Enforce verification with the provided certificate
+                )
+                self.client = docker.DockerClient(
+                    base_url="unix://var/run/docker.sock",
+                    tls=tls_config
+                )
+                #log(f"Docker client initialized with CA certificate from {self.path_registry_ca}", "INFO")
+            else:
+                self.client = docker.from_env()
+                log("Docker client initialized without custom TLS configuration", "INFO")
+                if not self.path_registry_ca:
+                    log("Warning: 'ca_path' not found in registry settings", "WARNING")
+                elif not os.path.exists(self.path_registry_ca):
+                    log(f"Warning: CA certificate path {self.path_registry_ca} does not exist", "WARNING")
+        except docker.errors.DockerException as e:
+            log(f"Error initializing Docker client: {str(e)}", "ERROR")
+            raise Exception(f"Error initializing Docker client: {e}")
 
     def build_image(self, repo_path, image_name):
         try:
@@ -29,6 +54,7 @@ class DockerService:
 
     def generate_image_name(self, run_id):
         try:
+            # Remove the https:// prefix for the image tag
             return f"{self.reg_settings['url']}/{self.reg_settings['project']}/{run_id}"
         except KeyError as e:
             log(f"Missing registry setting: {str(e)}", "ERROR")
@@ -39,7 +65,8 @@ class DockerService:
             url = self.reg_settings.get("url")
             username = self.reg_settings.get("username")
             password = self.reg_settings.get("password")
-            self.client.login(username=username, password=password, registry="http://"+url)
+            # Use HTTPS since we're trusting the certificate via TLSConfig
+            self.client.login(username=username, password=password, registry=f"https://{url}")
             log(f"Logged in to registry {url} successfully")
         except Exception as e:
             log(f"Unexpected error logging into registry {url}: {str(e)}", "ERROR")

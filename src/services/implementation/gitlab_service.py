@@ -26,17 +26,11 @@ class GitlabService:
 
     def has_file_in_repo(self, project_id: str, file_path: str, ref: str) -> bool:
         client = self.client
-
         try:
             project = client.projects.get(project_id)
-        except gitlab.exceptions.GitlabGetError as e:
-            log(f'Project {project_id} not found. Details: {e}', "ERROR")
-            return None
-
-        try:
             project.files.get(file_path, ref=ref)
         except gitlab.exceptions.GitlabGetError as e:
-            log(f'File {file_path} not found. Details: {e}', "ERROR")
+            log(f'Details: {e}', "ERROR")
             return False
 
         return True

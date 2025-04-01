@@ -163,6 +163,7 @@ class HookService(HookServiceProtocol):
             self.kubernetes_service.pv_service.create_persistent_volume_claim(
                 pvc_name, namespace, f"pv-storage-{run_meta['database']}", storage_size=STORAGE_SIZE
             )
+        log("before: self.kubernetes_service.pv_service.create_persistent_volume_claim")
         self.kubernetes_service.pv_service.create_persistent_volume_claim(
             output_pvc_name, namespace, volume_name_output, storage_size=OUTPUT_STORAGE_SIZE, access_modes=["ReadWriteOnce"]
         )

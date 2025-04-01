@@ -67,9 +67,27 @@ class NamespaceServiceV1(NamespaceServiceProtocol):
 
     def _is_pod_completed(self, namespace_name: str) -> bool:
         pod_list = self.v1.list_namespaced_pod(namespace=namespace_name)
-        if len(pod_list.items) > 0:
-            pod = pod_list.items[0]
-            log(f"Pod found in namespace: {namespace_name} with phase: {pod.status.phase}")
-            return pod.status.phase in ['Succeeded', 'Failed']
+        if len(pod_list.items) == 0:
+            #log(f"No pods found in namespace: {namespace_name}", "INFO")
+            return False
+
+        # Assuming one pod per namespace; take the first pod
+        pod = pod_list.items[0]
+        log(f"Pod found in namespace: {namespace_name} with phase: {pod.status.phase}", "INFO")
+
+        # Check the status of the main container (not the sidecar)
+        for container_status in pod.status.container_statuses or []:
+            # Identify the main container by name (excluding sidecar)
+            if container_status.name.startswith("secd-") and not container_status.name == "vault-agent":
+                #log(f"Main container {container_status.name} state: {container_status.state}", "DEBUG")
+                if container_status.state.terminated:
+                    # Main container has terminated; check if it succeeded or failed
+                    #log(f"Main container {container_status.name} terminated with exit code: {container_status.state.terminated.exit_code}", "INFO")
+                    return True  # Return True if the main container has finished (regardless of success/failure)
+                else:
+                    # Main container is still running or waiting
+                    return False
+
+        #log(f"No main container found in pod in namespace: {namespace_name}", "WARNING")
         return False
 

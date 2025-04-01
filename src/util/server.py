@@ -86,8 +86,7 @@ class Server:
         self.config_path = get_settings()['k8s']['configPath']
         self.config = client.Configuration()
         config.load_kube_config(config_file=self.config_path, client_configuration=self.config)
- 
-        self.config.verify_ssl = False
+        self.config.ssl_ca_cert = '/var/snap/microk8s/current/certs/ca.crt' 
 
         namespace_service = NamespaceServiceV1(config=self.config)    
         pv_service = PersistentVolumeServiceV1(config=self.config)
