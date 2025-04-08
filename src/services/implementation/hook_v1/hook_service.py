@@ -45,34 +45,26 @@ class HookService(HookServiceProtocol):
         temp_user_id = ""
 
         # Vault setup variables
-        service_account_name = "karolinska-1-test"  # Hardcoded from your YAML
-        vault_role_name = "karolinska-1-role"  # Hardcoded from your YAML
+        vault_role_name = "mysql-1-readonly"
 
         try:
             gitlab_user_id, keycloak_user_id = self._validate_request_and_permissions(body)
 
-            run_meta, release_name = self._prepare_repository_and_metadata(body["project"]["http_url"], repo_path, output_path)
+            run_meta, database_name = self._prepare_repository_and_metadata(body["project"]["http_url"], repo_path, output_path)
+            # Override database name to match hardcoded MySQL instance
+            log(f"run_meta['database_name']: {run_meta['database_name']}")
 
-            self._check_user_role(keycloak_user_id, release_name)
+            self._check_user_role(keycloak_user_id, database_name)
 
             temp_user_id = self._setup_temp_user(keycloak_user_id)
-
-            service_name = self._fetch_storage_service(release_name)
-
+            service_name = self._generate_service_name(database_name,"storage")
             image_name = self._handle_docker_operations(repo_path, run_id)
 
             self._create_namespace_and_pv(temp_user_id, run_id, run_meta, date, volume_name_output)
             env_vars = self._prepare_env_vars(service_name, run_meta)
             pvc_name = self._setup_pvc(run_meta, namespace, output_pvc_name, volume_name_output)
 
-            # Vault setup
-            self.kubernetes_service.create_service_account(service_account_name, namespace)
-            self.vault_service.create_kubernetes_auth_role(
-                role_name=vault_role_name,
-                service_account_name=service_account_name,
-                namespace=namespace,
-                policy="mysql-read-policy"  # Hardcoded policy name
-            )
+            self._vault_setup(namespace=namespace)
 
             self._create_pod(run_id, keycloak_user_id, image_name, run_meta, env_vars, pvc_name, namespace, vault_role_name)
         except Exception as e:
@@ -94,12 +86,12 @@ class HookService(HookServiceProtocol):
         self.gitlab_service.clone(http_url, repo_path)
         os.makedirs(output_path)
         run_meta = self.gitlab_service.get_metadata(f"{repo_path}/secd.yml")
-        release_name = run_meta['database']
-        return run_meta, release_name
+        database_name = run_meta['database_name']
+        return run_meta, database_name
 
-    def _check_user_role(self, keycloak_user_id: str, release_name: str) -> None:
-        if not self.keycloak_service.check_user_has_role(keycloak_user_id, DATABASE_SERVICE, release_name):
-            log(f"User {keycloak_user_id} lacks role for {release_name}", "ERROR")
+    def _check_user_role(self, keycloak_user_id: str, database_name: str) -> None:
+        if not self.keycloak_service.check_user_has_role(keycloak_user_id, DATABASE_SERVICE, database_name):
+            log(f"User {keycloak_user_id} lacks role for {database_name}", "ERROR")
             raise Exception("User does not have the required role.")
 
     def _setup_temp_user(self, keycloak_user_id: str) -> str:
@@ -107,11 +99,14 @@ class HookService(HookServiceProtocol):
         temp_user_password = "temp_password"
         return self.keycloak_service.create_temp_user(temp_user_id, temp_user_password)
 
-    def _fetch_storage_service(self, release_name: str) -> str:
-        service_name = self.kubernetes_service.get_service_by_helm_release(release_name, STORAGE_TYPE)
+    def _generate_service_name(self, name:str, namespace:str) -> str:
+        return f"{name}.{namespace}.svc.cluster.local"
+
+    def _fetch_storage_service(self, database_name: str) -> str:
+        service_name = self.kubernetes_service.get_service_by_helm_release(database_name, STORAGE_TYPE)
         if not service_name:
-            log(f"No service found for release {release_name}", "ERROR")
-            raise Exception(f"Service not found for release {release_name}")
+            log(f"No service found for release {database_name}", "ERROR")
+            raise Exception(f"Service not found for release {database_name}")
         return service_name
 
     def _handle_docker_operations(self, repo_path: str, run_id: str) -> str:
@@ -133,15 +128,9 @@ class HookService(HookServiceProtocol):
         )
 
     def _prepare_env_vars(self, service_name: str, run_meta: Dict[str, Any]) -> Dict[str, str]:
-        secret_name = f"secret-{run_meta['database']}"
-        db_user = self.kubernetes_service.get_secret(STORAGE_TYPE, secret_name, "user")
-        db_password = self.kubernetes_service.get_secret(STORAGE_TYPE, secret_name, "user-password")
-        if db_user is None or db_password is None:
-            raise ValueError(f"Secrets not found in {secret_name}")
+        # Hardcode DB_HOST for this specific MySQL service
         return {
-            "DB_USER": db_user,
-            "DB_PASS": db_password,
-            "DB_HOST": service_name,
+            "DB_HOST": "mysql-1.storage.svc.cluster.local",
             "NFS_PATH": '/data',
             "OUTPUT_PATH": '/output',
             "SECD": 'PRODUCTION'
@@ -149,52 +138,137 @@ class HookService(HookServiceProtocol):
 
     def _setup_pvc(
         self,
-        run_meta: Dict[str, Any],
+        run_meta: Dict[str, any],
         namespace: str,
         output_pvc_name: str,
         volume_name_output: str
     ) -> str:
-        pv = self.kubernetes_service.pv_service.get_pv_by_helm_release(run_meta['database'])
-        if not pv:
-            log(f"No PV found for release {run_meta['database']}", "ERROR")
-            raise Exception(f"PV not found for release {run_meta['database']}")
-        pvc_name = f"pvc-storage-{run_meta['database']}" if run_meta["database_type"] == "file" else ""
-        if run_meta["database_type"] == "file":
-            self.kubernetes_service.pv_service.create_persistent_volume_claim(
-                pvc_name, namespace, f"pv-storage-{run_meta['database']}", storage_size=STORAGE_SIZE
-            )
-        log("before: self.kubernetes_service.pv_service.create_persistent_volume_claim")
+        # Fetch the database pod using the correct label selector
+        db_pod = self.kubernetes_service.pod_service.get_pod_by_label(
+            label_selector=f"name={run_meta['database_name']}",  # e.g., "name=mysql-1"
+            namespace=STORAGE_TYPE  # "storage"
+        )
+        if not db_pod:
+            log(f"No pod found for database {run_meta['database_name']} in namespace {STORAGE_TYPE}", "ERROR")
+            raise Exception(f"Database pod not found for {run_meta['database_name']}")
+
+        # Extract PVC name from pod's volume spec
+        pvc_name = None
+        for volume in db_pod.spec.volumes:
+            if volume.persistent_volume_claim:
+                pvc_name = volume.persistent_volume_claim.claim_name  # e.g., "pvc-storage-mysql-1"
+                break
+        if not pvc_name:
+            log(f"No PVC found in pod for database {run_meta['database_name']}", "ERROR")
+            raise Exception("No PVC associated with the database pod")
+
+        # Fetch the PV bound to this PVC
+        pvc = self.kubernetes_service.pv_service.get_pvc(pvc_name, namespace=STORAGE_TYPE)
+        if not pvc or not pvc.spec.volume_name:
+            log(f"No PV bound to PVC {pvc_name} in namespace {STORAGE_TYPE}", "ERROR")
+            raise Exception(f"PV not found for PVC {pvc_name}")
+        pv_name = pvc.spec.volume_name  # e.g., "pv-storage-mysql-1"
+
+        # Log the discovered PV for debugging
+        log(f"Found PV {pv_name} for database {run_meta['database_name']} via pod data")
+
+        # Proceed with existing PVC setup for output
         self.kubernetes_service.pv_service.create_persistent_volume_claim(
             output_pvc_name, namespace, volume_name_output, storage_size=OUTPUT_STORAGE_SIZE, access_modes=["ReadWriteOnce"]
         )
-        return pvc_name
+
+        # Return the database PVC name if needed, or adjust based on your logic
+        return pvc_name if run_meta["database_type"] == "file" else ""
+
 
     def _create_pod(
         self,
         run_id: str,
         keycloak_user_id: str,
         image_name: str,
-        run_meta: Dict[str, Any],
+        run_meta: Dict[str, any],
         env_vars: Dict[str, str],
         pvc_name: str,
         namespace: str,
         vault_role: str
     ) -> None:
         cache_dir, mount_path = self.kubernetes_service.handle_cache_dir(run_meta, keycloak_user_id, run_id)
-        db_pod = self.kubernetes_service.get_pod_by_helm_release(release_name=run_meta['database'], namespace=STORAGE_TYPE)
-        db_label = db_pod.metadata.labels.get('database', '')
-        self.kubernetes_service.pod_service.create_pod_by_vault(
-            run_id=run_id,
-            image=image_name,
-            envs=env_vars,
-            gpu=run_meta['gpu'],
-            mount_path=mount_path,
-            database=db_label,
-            namespace=namespace,
-            pvc_name=pvc_name,
-            vault_role=vault_role
+        db_pod = self.kubernetes_service.pod_service.get_pod_by_label(
+            label_selector=f"name={run_meta['database_name']}",  # e.g., "name=mysql-1"
+            namespace=STORAGE_TYPE  # "storage"
         )
+
+        db_label = db_pod.metadata.labels.get('database', '')
+        self.kubernetes_service.pod_service.create_pod_by_vault(  # Switch to v3
+                run_id=run_id,
+                image=image_name,
+                envs=env_vars,
+                gpu=run_meta['gpu'],
+                mount_path=mount_path,
+                database=db_label,
+                namespace=namespace,
+                pvc_name=pvc_name,
+                vault_role="mysql-1-readonly"  # Match Vault role from _vault_setup
+            )
 
     def _cleanup_temp_user(self, temp_user_id: str) -> None:
         if temp_user_id:
             self.keycloak_service.delete_temp_user(temp_user_id)
+    
+    def _vault_setup(self, namespace):
+        # Define database details
+        database_name = "mysql-1"
+        database_type = "mysql"
+
+        # Define resource names
+        db_role_name = f"role-{database_name}"  # e.g., role-mysql-1 (for database creds)
+        policy_name = f"policy-{database_name}"  # e.g., policy-mysql-1
+        service_account_name = f"sa-{database_name}"  # e.g., sa-mysql-1 (in pod's namespace)
+        k8s_auth_role_name = f"role-{database_name}-{namespace}"  # e.g., role-mysql-1-secd-<run_id>
+
+        # Step 1: Configure Vault database connection
+        connection_url_template = f"{{{{username}}}}:{{{{password}}}}@tcp(service-{database_name}.storage.svc.cluster.local:3306)/"
+        allowed_roles = [db_role_name]
+        username = "vault"
+        password = "vaultpassword"
+        self.vault_service.configure_database_connection(
+            database_name=database_name,
+            db_type=database_type,
+            connection_url_template=connection_url_template,
+            allowed_roles=allowed_roles,
+            admin_username=username,
+            admin_password=password
+        )
+
+        # Step 2: Create database role for temporary users
+        creation_statements = [
+            "CREATE USER '{{name}}'@'%' IDENTIFIED BY '{{password}}';",
+            "GRANT SELECT ON *.* TO '{{name}}'@'%';"
+        ]
+        self.vault_service.create_database_role(
+            role_name=db_role_name,
+            database_name=database_name,
+            creation_statements=creation_statements,
+        )
+
+        # Step 3: Create policy for accessing temporary credentials
+        policy_rules = f"""
+            path "database/creds/{db_role_name}" {{
+                capabilities = ["read"]
+            }}
+        """
+        self.vault_service.create_policy(
+            policy_name=policy_name,
+            policy_rules=policy_rules
+        )
+
+        # Step 4: Create service account in the pod's namespace
+        self.kubernetes_service.create_service_account(service_account_name, namespace)
+
+        # Step 5: Create Kubernetes auth role for the pod's namespace
+        self.vault_service.create_kubernetes_auth_role(
+            role_name=k8s_auth_role_name,
+            service_account_name=service_account_name,
+            service_account_namespace=namespace,  # Pod's namespace (e.g., secd-<run_id>)
+            policy=policy_name
+        )

@@ -16,9 +16,8 @@ class GitlabService:
         self.glSettings = get_settings()['gitlab']
         self.client = gitlab.Gitlab(
             url = self.glSettings['url'],
-            private_token = self.glSettings['token'],
-            ssl_verify=self.glSettings['ssl_verify_path'],
-            )
+            private_token = self.glSettings['token']
+        )
         try:
             self.client.auth()
         except gitlab.exceptions.GitlabAuthenticationError as e:
@@ -32,7 +31,6 @@ class GitlabService:
         except gitlab.exceptions.GitlabGetError as e:
             log(f'Details: {e}', "ERROR")
             return False
-
         return True
 
 

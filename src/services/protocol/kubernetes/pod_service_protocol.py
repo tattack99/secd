@@ -30,6 +30,9 @@ class PodServiceProtocol(Protocol):
             """
             ...
 
+    def get_pod_by_label(self, label_selector: str, namespace: str) -> Optional[V1Pod]:
+        ...
+
     def get_pod(self, namespace: str, name: str) -> Optional[V1Pod]:
         """Retrieve a pod by name and namespace."""
         ...

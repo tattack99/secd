@@ -44,6 +44,30 @@ class PersistentVolumeServiceV1(PersistentVolumeServiceProtocol):
         except client.ApiException as e:
             log(f"Failed to get PV {name}: {e}", "ERROR")
             return None
+    
+    def get_pvc(self, name: str, namespace: str) -> Optional[client.V1PersistentVolumeClaim]:
+        """Retrieve a Persistent Volume Claim by name and namespace.
+
+        Args:
+            name (str): The name of the PVC (e.g., "pvc-storage-mysql-1").
+            namespace (str): The namespace where the PVC resides (e.g., "storage").
+
+        Returns:
+            Optional[client.V1PersistentVolumeClaim]: The PVC object if found, None otherwise.
+        """
+        try:
+            pvc = self.v1.read_namespaced_persistent_volume_claim(
+                name=name,
+                namespace=namespace
+            )
+            log(f"PVC '{name}' found in namespace '{namespace}'", "DEBUG")
+            return pvc
+        except client.ApiException as e:
+            if e.status == 404:
+                log(f"PVC '{name}' not found in namespace '{namespace}'", "WARNING")
+            else:
+                log(f"Failed to get PVC '{name}' in namespace '{namespace}': {str(e)}", "ERROR")
+            return None
 
     def delete_persistent_volume(self, name: str) -> None:
         try:

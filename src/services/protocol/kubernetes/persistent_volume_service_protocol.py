@@ -17,6 +17,9 @@ class PersistentVolumeServiceProtocol(Protocol):
     def get_persistent_volume(self, name: str) -> Optional[V1PersistentVolume]:
         ...
 
+    def get_pvc(self, name: str, namespace: str) -> Optional[V1PersistentVolumeClaim]:
+        ...
+
     def delete_persistent_volume(self, name: str) -> None:
         ...
 
