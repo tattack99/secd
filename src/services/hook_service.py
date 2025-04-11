@@ -4,12 +4,11 @@ import uuid
 from typing import Dict, Optional, Tuple, Any
 from app.src.util.logger import log
 from app.src.util.setup import get_settings
-from app.src.services.protocol.hook_service_protocol import HookServiceProtocol
-from app.src.services.implementation.kubernetes_service import KubernetesService
-from app.src.services.implementation.vault_service import VaultService
-from app.src.services.implementation.gitlab_service import GitlabService
-from app.src.services.implementation.keycloak_service import KeycloakService
-from app.src.services.implementation.docker_service import DockerService
+from app.src.services.kubernetes_service import KubernetesService
+from app.src.services.vault_service import VaultService
+from app.src.services.gitlab_service import GitlabService
+from app.src.services.keycloak_service import KeycloakService
+from app.src.services.docker_service import DockerService
 
 SECD_GROUP = "secd"
 STORAGE_TYPE = "storage"
@@ -17,7 +16,7 @@ DATABASE_SERVICE = "database-service"
 STORAGE_SIZE = "100Gi"
 OUTPUT_STORAGE_SIZE = "50Gi"
 
-class HookService(HookServiceProtocol):
+class HookService():
     def __init__(
         self,
         gitlab_service: GitlabService,

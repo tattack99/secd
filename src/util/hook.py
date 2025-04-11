@@ -3,12 +3,12 @@ import json
 import threading
 import gitlab
 
-from app.src.services.protocol.hook_service_protocol import HookServiceProtocol
+from app.src.services.hook_service import HookService
 from app.src.util.logger import log
 from app.src.util.setup import get_settings
 
 class Hook:
-    def __init__(self, hook_service: HookServiceProtocol):
+    def __init__(self, hook_service: HookService):
         self.hook_service = hook_service
 
     def on_post(self, req, resp):

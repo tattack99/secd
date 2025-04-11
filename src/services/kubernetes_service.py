@@ -2,12 +2,12 @@ from typing import Optional, Dict, List
 from kubernetes import client
 from app.src.util.setup import get_settings
 from app.src.util.logger import log
-from app.src.services.protocol.kubernetes_services.namespace_service_protocol import NamespaceServiceProtocol
-from app.src.services.protocol.kubernetes_services.pod_service_protocol import PodServiceProtocol
-from app.src.services.protocol.kubernetes_services.persistent_volume_service_protocol import PersistentVolumeServiceProtocol
-from app.src.services.protocol.kubernetes_services.secret_service_protocol import SecretServiceProtocol
-from app.src.services.protocol.kubernetes_services.helm_service_protocol import HelmServiceProtocol
-from app.src.services.protocol.kubernetes_services.service_account_service_protocol import ServiceAccountServiceProtocol
+from app.src.services.kubernetes_services.namespace_service import NamespaceService
+from app.src.services.kubernetes_services.pod_service import PodService
+from app.src.services.kubernetes_services.persistent_volume_service import PersistentVolumeService
+from app.src.services.kubernetes_services.secret_service import SecretService
+from app.src.services.kubernetes_services.helm_service import HelmService
+from app.src.services.kubernetes_services.service_account_service import ServiceAccountService
 
 import os
 import datetime
@@ -15,12 +15,12 @@ import datetime
 class KubernetesService:
     def __init__(
         self,
-        namespace_service: NamespaceServiceProtocol,
-        pod_service: PodServiceProtocol,
-        pv_service: PersistentVolumeServiceProtocol,
-        secret_service: SecretServiceProtocol,
-        helm_service: HelmServiceProtocol,
-        service_account_service: ServiceAccountServiceProtocol
+        namespace_service: NamespaceService,
+        pod_service: PodService,
+        pv_service: PersistentVolumeService,
+        secret_service: SecretService,
+        helm_service: HelmService,
+        service_account_service: ServiceAccountService
     ):
         self.namespace_service = namespace_service
         self.pod_service = pod_service

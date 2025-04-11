@@ -1,9 +1,8 @@
 from kubernetes import client
 from app.src.util.logger import log
-from app.src.services.protocol.kubernetes_services.helm_service_protocol import HelmServiceProtocol
 from typing import Optional
 
-class HelmService(HelmServiceProtocol):
+class HelmService():
     def __init__(self, config: client.Configuration):   
         api_client = client.ApiClient(configuration=config)
         self.v1 = client.CoreV1Api(api_client=api_client)

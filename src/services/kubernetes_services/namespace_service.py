@@ -1,10 +1,9 @@
 from kubernetes import client, config
 from app.src.util.logger import log
-from app.src.services.protocol.kubernetes_services.namespace_service_protocol import NamespaceServiceProtocol
 from typing import List, Optional
 import datetime
 
-class NamespaceService(NamespaceServiceProtocol):
+class NamespaceService():
     def __init__(self, config: client.Configuration):   
         api_client = client.ApiClient(configuration=config)
         self.v1 = client.CoreV1Api(api_client=api_client)

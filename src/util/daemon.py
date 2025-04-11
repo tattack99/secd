@@ -1,7 +1,7 @@
 import time
 import urllib3
-from app.src.services.implementation.gitlab_service import GitlabService
-from app.src.services.implementation.kubernetes_service import KubernetesService
+from app.src.services.gitlab_service import GitlabService
+from app.src.services.kubernetes_service import KubernetesService
 from app.src.util.logger import log
 
 class Daemon:

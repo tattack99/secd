@@ -1,11 +1,10 @@
 import hvac
 
-from app.src.services.protocol.vault_service_protocol import VaultServiceProtocol
 from app.src.util.setup import get_settings
 from app.src.util.logger import log
 
 
-class VaultService(VaultServiceProtocol):
+class VaultService():
     def __init__(self):
         vault_addr = get_settings()['vault']['address']
         vault_token = get_settings()['vault']['token']
