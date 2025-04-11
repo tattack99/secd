@@ -1,10 +1,10 @@
 from kubernetes import client
 from app.src.util.setup import get_settings
 from app.src.util.logger import log
-from app.src.services.protocol.kubernetes.pod_service_protocol import PodServiceProtocol
+from app.src.services.protocol.kubernetes_services.pod_service_protocol import PodServiceProtocol
 from typing import List, Optional, Dict
 
-class PodServiceV1(PodServiceProtocol):
+class PodService(PodServiceProtocol):
     def __init__(self, config: client.Configuration):   
         api_client = client.ApiClient(configuration=config)
         self.v1 = client.CoreV1Api(api_client=api_client)

@@ -3,10 +3,10 @@ import time
 from kubernetes import client, config
 from app.src.util.setup import get_settings
 from app.src.util.logger import log
-from app.src.services.protocol.kubernetes.persistent_volume_service_protocol import PersistentVolumeServiceProtocol
+from app.src.services.protocol.kubernetes_services.persistent_volume_service_protocol import PersistentVolumeServiceProtocol
 from typing import List, Optional
 
-class PersistentVolumeServiceV1(PersistentVolumeServiceProtocol):
+class PersistentVolumeService(PersistentVolumeServiceProtocol):
     def __init__(self, config: client.Configuration):   
         api_client = client.ApiClient(configuration=config)
         self.v1 = client.CoreV1Api(api_client)

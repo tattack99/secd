@@ -2,17 +2,17 @@ from typing import Optional, Dict, List
 from kubernetes import client
 from app.src.util.setup import get_settings
 from app.src.util.logger import log
-from app.src.services.protocol.kubernetes.namespace_service_protocol import NamespaceServiceProtocol
-from app.src.services.protocol.kubernetes.pod_service_protocol import PodServiceProtocol
-from app.src.services.protocol.kubernetes.persistent_volume_service_protocol import PersistentVolumeServiceProtocol
-from app.src.services.protocol.kubernetes.secret_service_protocol import SecretServiceProtocol
-from app.src.services.protocol.kubernetes.helm_service_protocol import HelmServiceProtocol
-from app.src.services.protocol.kubernetes.service_account_service_protocol import ServiceAccountServiceProtocol
+from app.src.services.protocol.kubernetes_services.namespace_service_protocol import NamespaceServiceProtocol
+from app.src.services.protocol.kubernetes_services.pod_service_protocol import PodServiceProtocol
+from app.src.services.protocol.kubernetes_services.persistent_volume_service_protocol import PersistentVolumeServiceProtocol
+from app.src.services.protocol.kubernetes_services.secret_service_protocol import SecretServiceProtocol
+from app.src.services.protocol.kubernetes_services.helm_service_protocol import HelmServiceProtocol
+from app.src.services.protocol.kubernetes_services.service_account_service_protocol import ServiceAccountServiceProtocol
 
 import os
 import datetime
 
-class KubernetesServiceV1:
+class KubernetesService:
     def __init__(
         self,
         namespace_service: NamespaceServiceProtocol,

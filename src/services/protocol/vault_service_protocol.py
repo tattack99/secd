@@ -9,9 +9,7 @@ class VaultServiceProtocol(Protocol):
         policy: str,
         ttl: str = "1h"
     ) -> None:
-        """Create a Vault role for Kubernetes authentication."""
         pass
 
     def delete_kubernetes_auth_role(self, role_name: str) -> None:
-        """Delete a Vault role for Kubernetes authentication."""
-        pass
+        ...

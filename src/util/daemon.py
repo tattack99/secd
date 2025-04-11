@@ -1,13 +1,13 @@
 import time
 import urllib3
 from app.src.services.implementation.gitlab_service import GitlabService
-from app.src.services.implementation.kubernetes_service_v1 import KubernetesServiceV1
+from app.src.services.implementation.kubernetes_service import KubernetesService
 from app.src.util.logger import log
 
 class Daemon:
     def __init__(
             self,
-            kubernetes_service : KubernetesServiceV1,
+            kubernetes_service : KubernetesService,
             gitlab_service : GitlabService
         ):
         self.kubernetes_service = kubernetes_service

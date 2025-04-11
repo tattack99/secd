@@ -4,9 +4,9 @@ import uuid
 from typing import Dict, Optional, Tuple, Any
 from app.src.util.logger import log
 from app.src.util.setup import get_settings
-from app.src.services.protocol.hook.hook_service_protocol import HookServiceProtocol
-from app.src.services.implementation.kubernetes_service_v1 import KubernetesServiceV1
-from app.src.services.implementation.vault_v1.vault_service_v1 import VaultServiceV1
+from app.src.services.protocol.hook_service_protocol import HookServiceProtocol
+from app.src.services.implementation.kubernetes_service import KubernetesService
+from app.src.services.implementation.vault_service import VaultService
 from app.src.services.implementation.gitlab_service import GitlabService
 from app.src.services.implementation.keycloak_service import KeycloakService
 from app.src.services.implementation.docker_service import DockerService
@@ -23,8 +23,8 @@ class HookService(HookServiceProtocol):
         gitlab_service: GitlabService,
         keycloak_service: KeycloakService,
         docker_service: DockerService,
-        kubernetes_service: KubernetesServiceV1,
-        vault_service: VaultServiceV1,
+        kubernetes_service: KubernetesService,
+        vault_service: VaultService,
     ):
         self.gitlab_service = gitlab_service
         self.keycloak_service = keycloak_service
@@ -77,7 +77,8 @@ class HookService(HookServiceProtocol):
             )
 
             pvc_name = self._setup_pvc(
-                run_meta = run_meta, 
+                database_name = database_name,
+                database_type = database_type,
                 namespace = namespace, 
                 pvc_name_output = pvc_name_output, 
                 pv_name_output = pv_name_output
@@ -164,19 +165,20 @@ class HookService(HookServiceProtocol):
 
     def _setup_pvc(
         self,
-        run_meta: Dict[str, Any],
+        database_name:str, 
+        database_type:str,
         namespace: str,
         pvc_name_output: str,
         pv_name_output: str
     ) -> str:
         # Fetch the database pod using the correct label selector
         db_pod = self.kubernetes_service.pod_service.get_pod_by_label(
-            label_selector=f"name={run_meta['database_name']}",  # e.g., "name=mysql-1"
+            label_selector=f"name={database_name}",  # e.g., "name=mysql-1"
             namespace=STORAGE_TYPE
         )
         if not db_pod:
-            log(f"No pod found for database {run_meta['database_name']} in namespace {STORAGE_TYPE}", "ERROR")
-            raise Exception(f"Database pod not found for {run_meta['database_name']}")
+            log(f"No pod found for database {database_name} in namespace {STORAGE_TYPE}", "ERROR")
+            raise Exception(f"Database pod not found for {database_name}")
 
         # Extract PVC name from pod's volume spec
         pvc_name = None
@@ -185,7 +187,7 @@ class HookService(HookServiceProtocol):
                 pvc_name = volume.persistent_volume_claim.claim_name  # e.g., "pvc-storage-mysql-1"
                 break
         if not pvc_name:
-            log(f"No PVC found in pod for database {run_meta['database_name']}", "ERROR")
+            log(f"No PVC found in pod for database {database_name}", "ERROR")
             raise Exception("No PVC associated with the database pod")
 
         # Fetch the PV bound to this PVC
@@ -196,7 +198,7 @@ class HookService(HookServiceProtocol):
         pv_name = pvc.spec.volume_name  # e.g., "pv-storage-mysql-1"
 
         # Log the discovered PV for debugging
-        log(f"Found PV {pv_name} for database {run_meta['database_name']} via pod data")
+        log(f"Found PV {pv_name} for database {database_name} via pod data")
 
         # Proceed with existing PVC setup for output
         self.kubernetes_service.pv_service.create_persistent_volume_claim(
@@ -204,7 +206,7 @@ class HookService(HookServiceProtocol):
         )
 
         # Return the database PVC name if needed, or adjust based on your logic
-        return pvc_name if run_meta["database_type"] == "file" else ""
+        return pvc_name if database_type == "file" else ""
 
 
     def _create_pod(

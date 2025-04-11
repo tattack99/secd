@@ -4,7 +4,6 @@ from kubernetes import client
 
 class PersistentVolumeServiceProtocol(Protocol):
 
-    # CRUD methods
     def create_persistent_volume(
         self,
         name: str,

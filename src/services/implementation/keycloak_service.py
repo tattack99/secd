@@ -3,7 +3,6 @@ from typing import Dict, List
 from app.src.util.setup import get_settings
 from app.src.util.logger import log
 
-
 class KeycloakService:
     def __init__(self):
         self.kc_settings = get_settings()['keycloak']

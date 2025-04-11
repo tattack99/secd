@@ -3,7 +3,7 @@ import json
 import threading
 import gitlab
 
-from app.src.services.protocol.hook.hook_service_protocol import HookServiceProtocol
+from app.src.services.protocol.hook_service_protocol import HookServiceProtocol
 from app.src.util.logger import log
 from app.src.util.setup import get_settings
 

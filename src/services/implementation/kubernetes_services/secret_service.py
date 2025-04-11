@@ -2,10 +2,10 @@ from kubernetes import client, config
 import base64
 from app.src.util.setup import get_settings
 from app.src.util.logger import log
-from app.src.services.protocol.kubernetes.secret_service_protocol import SecretServiceProtocol
+from app.src.services.protocol.kubernetes_services.secret_service_protocol import SecretServiceProtocol
 from typing import Optional
 
-class SecretServiceV1(SecretServiceProtocol):
+class SecretService(SecretServiceProtocol):
     def __init__(self, config: client.Configuration):   
         api_client = client.ApiClient(configuration=config)
         self.v1 = client.CoreV1Api(api_client=api_client)

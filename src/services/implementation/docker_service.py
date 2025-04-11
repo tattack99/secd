@@ -7,7 +7,6 @@ from app.src.util.logger import log
 
 class DockerService:
     def __init__(self):
-        """Initialize Docker client with CA certificate from settings for the registry."""
         self.reg_settings = get_settings()['registry']
         self.path_registry_ca = get_settings()['registry']['ca_path']
         try:

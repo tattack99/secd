@@ -1,11 +1,11 @@
 import datetime
 from typing import List
-from app.src.services.protocol.kubernetes.service_account_service_protocol import ServiceAccountServiceProtocol
+from app.src.services.protocol.kubernetes_services.service_account_service_protocol import ServiceAccountServiceProtocol
 from kubernetes import client
 from app.src.util.logger import log
 
 
-class ServiceAccountServiceV1(ServiceAccountServiceProtocol):
+class ServiceAccountService(ServiceAccountServiceProtocol):
     def __init__(self, config: client.Configuration):   
         api_client = client.ApiClient(configuration=config)
         self.v1 = client.CoreV1Api(api_client=api_client)
