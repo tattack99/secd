@@ -11,7 +11,6 @@ class PersistentVolumeServiceV1(PersistentVolumeServiceProtocol):
         api_client = client.ApiClient(configuration=config)
         self.v1 = client.CoreV1Api(api_client)
 
-    # CRUD Methods
     def create_persistent_volume(
         self,
         name: str,
@@ -24,7 +23,10 @@ class PersistentVolumeServiceV1(PersistentVolumeServiceProtocol):
             spec=client.V1PersistentVolumeSpec(
                 access_modes=access_modes,
                 capacity={"storage": capacity},
-                nfs=client.V1NFSVolumeSource(path=path, server="nfs.secd"),
+                nfs=client.V1NFSVolumeSource(
+                    path=path, 
+                    server="nfs.secd"
+                ),
                 storage_class_name="nfs",
                 persistent_volume_reclaim_policy="Retain",
                 volume_mode="Filesystem",
@@ -47,7 +49,6 @@ class PersistentVolumeServiceV1(PersistentVolumeServiceProtocol):
     
     def get_pvc(self, name: str, namespace: str) -> Optional[client.V1PersistentVolumeClaim]:
         """Retrieve a Persistent Volume Claim by name and namespace.
-
         Args:
             name (str): The name of the PVC (e.g., "pvc-storage-mysql-1").
             namespace (str): The namespace where the PVC resides (e.g., "storage").
@@ -60,7 +61,6 @@ class PersistentVolumeServiceV1(PersistentVolumeServiceProtocol):
                 name=name,
                 namespace=namespace
             )
-            log(f"PVC '{name}' found in namespace '{namespace}'", "DEBUG")
             return pvc
         except client.ApiException as e:
             if e.status == 404:

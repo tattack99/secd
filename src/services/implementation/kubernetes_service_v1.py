@@ -42,10 +42,10 @@ class KubernetesServiceV1:
                 log(f"Cache directory created at: {cache_path}")
         return cache_dir, mount_path
 
-    def create_namespace(self, user_id: str, run_id: str, run_for: int) -> None:
+    def create_namespace(self, user_id: str, run_id: str, run_for: int, labels: str) -> None:
         run_until = datetime.datetime.now() + datetime.timedelta(hours=run_for)
         namespace_name = f"secd-{run_id}"
-        labels = {"access": "database-access"}
+        #labels = {"access": "database-access"}
         annotations = {"userid": user_id, "rununtil": run_until.isoformat()}
         self.namespace_service.create_namespace(namespace_name, labels, annotations)
 

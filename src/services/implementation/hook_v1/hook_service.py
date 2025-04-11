@@ -4,9 +4,9 @@ import uuid
 from typing import Dict, Optional, Tuple, Any
 from app.src.util.logger import log
 from app.src.util.setup import get_settings
+from app.src.services.protocol.hook.hook_service_protocol import HookServiceProtocol
 from app.src.services.implementation.kubernetes_service_v1 import KubernetesServiceV1
 from app.src.services.implementation.vault_v1.vault_service_v1 import VaultServiceV1
-from app.src.services.protocol.hook.hook_service_protocol import HookServiceProtocol
 from app.src.services.implementation.gitlab_service import GitlabService
 from app.src.services.implementation.keycloak_service import KeycloakService
 from app.src.services.implementation.docker_service import DockerService
@@ -16,7 +16,6 @@ STORAGE_TYPE = "storage"
 DATABASE_SERVICE = "database-service"
 STORAGE_SIZE = "100Gi"
 OUTPUT_STORAGE_SIZE = "50Gi"
-VAULT_ADDR = get_settings()['vault']['address']
 
 class HookService(HookServiceProtocol):
     def __init__(
@@ -33,120 +32,147 @@ class HookService(HookServiceProtocol):
         self.kubernetes_service = kubernetes_service
         self.vault_service = vault_service
 
-    def create(self, body: Dict[str, Any]) -> None:
+    def create(self, body: Dict[str, Any]):
         run_id = str(uuid.uuid4()).replace('-', '')
         repo_path = f"{get_settings()['path']['repoPath']}/{run_id}"
         date = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
         output_path = f"{repo_path}/outputs/{date}-{run_id}"
-
         namespace = f"secd-{run_id}"
-        output_pvc_name = f"secd-pvc-{run_id}-output"
-        volume_name_output = f"secd-{run_id}-output"
-        temp_user_id = ""
-
-        # Vault setup variables
-        vault_role_name = "mysql-1-readonly"
+        pvc_repo_path = get_settings()['k8s']['pvcPath']
+        pvc_name_output = f"secd-pvc-{run_id}-output"
+        pv_name_output = f"secd-pv-{run_id}-output"
 
         try:
-            gitlab_user_id, keycloak_user_id = self._validate_request_and_permissions(body)
 
-            run_meta, database_name = self._prepare_repository_and_metadata(body["project"]["http_url"], repo_path, output_path)
-            # Override database name to match hardcoded MySQL instance
-            log(f"run_meta['database_name']: {run_meta['database_name']}")
+            run_meta, keycloak_user_id, image_name = self._validate(
+                body = body,
+                repo_path = repo_path,
+                output_path = output_path,
+                run_id = run_id
+            )
 
-            self._check_user_role(keycloak_user_id, database_name)
+            database_name = run_meta["database_name"]
+            database_type = run_meta["database_type"]
+            run_for = run_meta["runfor"]
+            namespace_labels = {"name": database_name}
+            service_name = f"service-{database_name}.storage.svc.cluster.local"
+            env_vars = {
+                "DB_HOST": service_name,
+                "NFS_PATH": "/data",
+                "OUTPUT_PATH": "/output",
+                "SECD": "PRODUCTION"
+            }
 
-            temp_user_id = self._setup_temp_user(keycloak_user_id)
-            service_name = self._generate_service_name(database_name,"storage")
-            image_name = self._handle_docker_operations(repo_path, run_id)
+            self._create_namespace(
+                user_id=keycloak_user_id,
+                run_id=run_id,
+                run_for=run_for,
+                labels=namespace_labels,
+            )
+            self._create_pv(
+                pv_name_output=pv_name_output,
+                pvc_repo_path = pvc_repo_path,
+                date = date,
+                run_id = run_id
+            )
 
-            self._create_namespace_and_pv(temp_user_id, run_id, run_meta, date, volume_name_output)
-            env_vars = self._prepare_env_vars(service_name, run_meta)
-            pvc_name = self._setup_pvc(run_meta, namespace, output_pvc_name, volume_name_output)
+            pvc_name = self._setup_pvc(
+                run_meta = run_meta, 
+                namespace = namespace, 
+                pvc_name_output = pvc_name_output, 
+                pv_name_output = pv_name_output
+            )
 
-            self._vault_setup(namespace=namespace)
+            vault_role_name = self._vault_setup(
+                database_name = database_name,
+                database_type = database_type,
+                namespace = namespace
+            )
 
-            self._create_pod(run_id, keycloak_user_id, image_name, run_meta, env_vars, pvc_name, namespace, vault_role_name)
+            self._create_pod(
+                run_id = run_id, 
+                keycloak_user_id = keycloak_user_id, 
+                image_name = image_name, 
+                run_meta = run_meta, 
+                env_vars = env_vars, 
+                pvc_name = pvc_name, 
+                namespace = namespace, 
+                vault_role = vault_role_name
+            )
+
         except Exception as e:
             log(f"Error in create process: {str(e)}", "ERROR")
-            raise
-        finally:
-            self._cleanup_temp_user(temp_user_id)
 
-    def _validate_request_and_permissions(self, body: Dict[str, Any]) -> Tuple[str, str]:
+    def _validate(
+        self,
+        body: Dict[str, Any],
+        repo_path: str,
+        output_path: str,
+        run_id
+    ):
         self.gitlab_service.validate_body(body)
+
         gitlab_user_id = body['user_id']
+        http_url = body["project"]["http_url"]
+
         keycloak_user_id = self.gitlab_service.get_idp_user_id(int(gitlab_user_id))
         if not self.keycloak_service.check_user_in_group(keycloak_user_id, SECD_GROUP):
             log(f"User {keycloak_user_id} not in '{SECD_GROUP}' group", "ERROR")
             raise Exception("User is not in the group.")
-        return gitlab_user_id, keycloak_user_id
 
-    def _prepare_repository_and_metadata(self, http_url: str, repo_path: str, output_path: str) -> Tuple[Dict[str, Any], str]:
         self.gitlab_service.clone(http_url, repo_path)
         os.makedirs(output_path)
+
         run_meta = self.gitlab_service.get_metadata(f"{repo_path}/secd.yml")
         database_name = run_meta['database_name']
-        return run_meta, database_name
 
-    def _check_user_role(self, keycloak_user_id: str, database_name: str) -> None:
         if not self.keycloak_service.check_user_has_role(keycloak_user_id, DATABASE_SERVICE, database_name):
             log(f"User {keycloak_user_id} lacks role for {database_name}", "ERROR")
             raise Exception("User does not have the required role.")
 
-    def _setup_temp_user(self, keycloak_user_id: str) -> str:
-        temp_user_id = "temp_" + keycloak_user_id
-        temp_user_password = "temp_password"
-        return self.keycloak_service.create_temp_user(temp_user_id, temp_user_password)
-
-    def _generate_service_name(self, name:str, namespace:str) -> str:
-        return f"{name}.{namespace}.svc.cluster.local"
-
-    def _fetch_storage_service(self, database_name: str) -> str:
-        service_name = self.kubernetes_service.get_service_by_helm_release(database_name, STORAGE_TYPE)
-        if not service_name:
-            log(f"No service found for release {database_name}", "ERROR")
-            raise Exception(f"Service not found for release {database_name}")
-        return service_name
-
-    def _handle_docker_operations(self, repo_path: str, run_id: str) -> str:
         self.docker_service.login_to_registry()
-        return self.docker_service.build_and_push_image(repo_path, run_id)
+        image_name = self.docker_service.build_and_push_image(repo_path, run_id)
+        
+        return run_meta, keycloak_user_id, image_name
 
-    def _create_namespace_and_pv(
+
+    def _create_pv(
         self,
-        temp_user_id: str,
-        run_id: str,
-        run_meta: Dict[str, Any],
-        date: str,
-        volume_name_output: str
-    ) -> None:
-        pvc_repo_path = get_settings()['k8s']['pvcPath']
-        self.kubernetes_service.create_namespace(temp_user_id, run_id, run_meta['runfor'])
+        pv_name_output:str,
+        pvc_repo_path:str,
+        date:str,
+        run_id:str,
+    ):
         self.kubernetes_service.pv_service.create_persistent_volume(
-            volume_name_output, f"{pvc_repo_path}/repos/{run_id}/outputs/{date}-{run_id}"
+            pv_name_output, 
+            f"{pvc_repo_path}/repos/{run_id}/outputs/{date}-{run_id}"
         )
 
-    def _prepare_env_vars(self, service_name: str, run_meta: Dict[str, Any]) -> Dict[str, str]:
-        # Hardcode DB_HOST for this specific MySQL service
-        return {
-            "DB_HOST": "mysql-1.storage.svc.cluster.local",
-            "NFS_PATH": '/data',
-            "OUTPUT_PATH": '/output',
-            "SECD": 'PRODUCTION'
-        }
+    def _create_namespace(
+        self,
+        user_id:str,
+        run_id:str,
+        run_for:int,
+        labels:str,
+    ):
+        self.kubernetes_service.create_namespace(
+            user_id = user_id, 
+            run_id = run_id, 
+            run_for = run_for,
+            labels = labels,
+        )
 
     def _setup_pvc(
         self,
-        run_meta: Dict[str, any],
+        run_meta: Dict[str, Any],
         namespace: str,
-        output_pvc_name: str,
-        volume_name_output: str
+        pvc_name_output: str,
+        pv_name_output: str
     ) -> str:
         # Fetch the database pod using the correct label selector
         db_pod = self.kubernetes_service.pod_service.get_pod_by_label(
             label_selector=f"name={run_meta['database_name']}",  # e.g., "name=mysql-1"
-            namespace=STORAGE_TYPE  # "storage"
+            namespace=STORAGE_TYPE
         )
         if not db_pod:
             log(f"No pod found for database {run_meta['database_name']} in namespace {STORAGE_TYPE}", "ERROR")
@@ -174,7 +200,7 @@ class HookService(HookServiceProtocol):
 
         # Proceed with existing PVC setup for output
         self.kubernetes_service.pv_service.create_persistent_volume_claim(
-            output_pvc_name, namespace, volume_name_output, storage_size=OUTPUT_STORAGE_SIZE, access_modes=["ReadWriteOnce"]
+            pvc_name_output, namespace, pv_name_output, storage_size=OUTPUT_STORAGE_SIZE, access_modes=["ReadWriteOnce"]
         )
 
         # Return the database PVC name if needed, or adjust based on your logic
@@ -191,15 +217,15 @@ class HookService(HookServiceProtocol):
         pvc_name: str,
         namespace: str,
         vault_role: str
-    ) -> None:
+    ):
         cache_dir, mount_path = self.kubernetes_service.handle_cache_dir(run_meta, keycloak_user_id, run_id)
         db_pod = self.kubernetes_service.pod_service.get_pod_by_label(
-            label_selector=f"name={run_meta['database_name']}",  # e.g., "name=mysql-1"
-            namespace=STORAGE_TYPE  # "storage"
+            label_selector=f"name={run_meta['database_name']}",
+            namespace=STORAGE_TYPE 
         )
 
-        db_label = db_pod.metadata.labels.get('database', '')
-        self.kubernetes_service.pod_service.create_pod_by_vault(  # Switch to v3
+        db_label = db_pod.metadata.labels.get('name')
+        self.kubernetes_service.pod_service.create_pod_by_vault(
                 run_id=run_id,
                 image=image_name,
                 envs=env_vars,
@@ -211,14 +237,15 @@ class HookService(HookServiceProtocol):
                 vault_role="mysql-1-readonly"  # Match Vault role from _vault_setup
             )
 
-    def _cleanup_temp_user(self, temp_user_id: str) -> None:
-        if temp_user_id:
-            self.keycloak_service.delete_temp_user(temp_user_id)
-    
-    def _vault_setup(self, namespace):
+    def _vault_setup(
+        self, 
+        database_name:str, 
+        database_type:str,
+        namespace:str
+    ) -> str:
         # Define database details
-        database_name = "mysql-1"
-        database_type = "mysql"
+        #database_name = "mysql-1"
+        #database_type = "mysql"
 
         # Define resource names
         db_role_name = f"role-{database_name}"  # e.g., role-mysql-1 (for database creds)
@@ -272,3 +299,4 @@ class HookService(HookServiceProtocol):
             service_account_namespace=namespace,  # Pod's namespace (e.g., secd-<run_id>)
             policy=policy_name
         )
+        return db_role_name

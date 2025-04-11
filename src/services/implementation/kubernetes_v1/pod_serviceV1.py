@@ -17,7 +17,7 @@ class PodServiceV1(PodServiceProtocol):
             ).items
             if pods:
                 pod = pods[0]
-                log(f"Pod '{pod.metadata.name}' found with label selector '{label_selector}' in namespace '{namespace}'", "DEBUG")
+                #log(f"Pod '{pod.metadata.name}' found with label selector '{label_selector}' in namespace '{namespace}'", "DEBUG")
                 return pod
             log(f"No pod found with label selector '{label_selector}' in namespace '{namespace}'", "WARNING")
             return None
@@ -39,10 +39,12 @@ class PodServiceV1(PodServiceProtocol):
     ) -> client.V1Pod:
         try:
             pod_name = f"secd-{run_id}"
-            database_name = "mysql-1"  # Match _vault_setup
+            database_name = database 
             service_account_name = f"sa-{database_name}"  # e.g., sa-mysql-1
             k8s_auth_role_name = f"role-{database_name}-{namespace}"  # e.g., role-mysql-1-secd-<run_id>
             db_role_name = f"role-{database_name}"  # e.g., role-mysql-1
+
+            #log(f"database : {database}", "DEBUG")
 
             # Vault annotations for credential injection
             annotations = {
@@ -59,7 +61,8 @@ class PodServiceV1(PodServiceProtocol):
 
             k8s_envs = [client.V1EnvVar(name=key, value=value) for key, value in envs.items()]
             resources = client.V1ResourceRequirements()
-            labels = {"access": database, "run_id": run_id}
+            labels = {"name": database_name, "run_id": run_id}
+            #log(f"labels : {labels}", "DEBUG")
             volumes = []
             volume_mounts = []
             if pvc_name:
@@ -96,7 +99,7 @@ class PodServiceV1(PodServiceProtocol):
                 container=container,
                 exec_command=exec_command
             )
-            log(f"Read logs from pod {name}", "DEBUG")
+            #log(f"Read logs from pod {name}", "DEBUG")
             return resp.strip()
         except Exception as e:
             log(f"Error reading logs from pod {name}: {str(e)}", "ERROR")

@@ -15,11 +15,11 @@ class ServiceAccountServiceV1(ServiceAccountServiceProtocol):
             metadata=client.V1ObjectMeta(name=name, namespace=namespace)
         )
         self.v1.create_namespaced_service_account(namespace=namespace, body=sa)
-        log(f"Created Service Account {name} in namespace {namespace}", "DEBUG")
+        #log(f"Created Service Account {name} in namespace {namespace}", "DEBUG")
 
     def delete_service_account(self, name: str, namespace: str) -> None:    
         self.v1.delete_namespaced_service_account(name=name, namespace=namespace)
-        log(f"Deleted Service Account {name} in namespace {namespace}", "DEBUG")
+        #log(f"Deleted Service Account {name} in namespace {namespace}", "DEBUG")
     
     def cleanup_service_accounts(self, namespaces: List[client.V1Namespace]) -> None:
         """Clean up service accounts in namespaces where pods are finished or time has expired, excluding the default service account."""
@@ -30,7 +30,7 @@ class ServiceAccountServiceV1(ServiceAccountServiceProtocol):
                 for sa in sa_list.items:
                     if sa.metadata.name != "default":  # Skip the default service account
                         self.delete_service_account(sa.metadata.name, namespace_name)
-                        log(f"Deleted Service Account {sa.metadata.name} in namespace {namespace_name}", "DEBUG")
+                        #log(f"Deleted Service Account {sa.metadata.name} in namespace {namespace_name}", "DEBUG")
 
     # Helper methods
     def _should_cleanup_namespace(self, namespace) -> bool:
