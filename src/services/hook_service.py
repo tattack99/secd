@@ -31,6 +31,7 @@ class HookService():
         self.kubernetes_service = kubernetes_service
         self.vault_service = vault_service
 
+        # TODO: Create dto (data transfer object) "run"
         self.run_id = "run_id"
         self.namespace = "namespace"
         self.date = datetime.datetime.now()
@@ -50,6 +51,7 @@ class HookService():
         self.env_vars = any
         self.pvc_name = any
         self.vault_role_name = any
+        self.service_name = any
 
 
     def create(self, body: Dict[str, Any]):
@@ -70,25 +72,25 @@ class HookService():
             self.database_type = self.run_meta["database_type"]
             self.run_for = self.run_meta["runfor"]
             self.namespace_labels = {"name": self.database_name}
-            service_name = f"service-{self.database_name}.storage.svc.cluster.local"
+            self.service_name = f"service-{self.database_name}.storage.svc.cluster.local"
             self.env_vars = {
-                "DB_HOST": service_name,
+                "DB_HOST": self.service_name,
                 "NFS_PATH": "/data",
                 "OUTPUT_PATH": "/output",
-                "SECD": "PRODUCTION"
+                "SECD": "PRODUCTION",
+                "DB_USER" : "",
+                "DB_PASS" : "",
             }
 
             # TODO: FIX file type
             if self.database_type == "file": 
                 self._database_is_file()
 
-            # TODO: FIX mysql
-            if self.database_type == "mysql": 
+            elif self.database_type == "mysql": 
                 self._database_is_mysql()
-                
 
             else:
-                log(f"self.database_type not implemented: {self.database_type}", "WARNING")
+                log(f"database_type not implemented: {self.database_type}", "WARNING")
 
         except Exception as e:
             log(f"Error in create process: {str(e)}", "ERROR")
@@ -107,14 +109,23 @@ class HookService():
         # After the pod can print out the data from there
         # We can add credentials verification after the pod can read data from mount location
 
-        # Create self.namespace for pod to run in
+        # Create namespace for pod to run in
         self._create_namespace()
         
-        # Create pv to save run of executing pod
+        # Create pv to save run to gitlab
         self._create_pv()
         
         # Do something with similar to: /home/cloud/secd/charts/test/nfs-pod-mount/nfs-pod-test.yaml
         # This pod is able to access data from the nfs
+
+        self.kubernetes_service.pod_service.create_nfs_pod(
+            database_name=self.database_name,
+            run_id=self.run_id,
+            image_name=self.image_name,
+            environment_variables=self.env_vars
+        )
+
+
 
     def _validate(self, body: Dict[str, Any]):
 
@@ -175,7 +186,7 @@ class HookService():
                 break
         if not self.pvc_name:
             log(f"No PVC found in pod for database {self.database_name}", "ERROR")
-            raise Exception("No PVC associated with the database pod")
+            raise Exception("No PVC associated with the database pobd")
 
         # Fetch the PV bound to this PVC
         pvc = self.kubernetes_service.pv_service.get_pvc(self.pvc_name, namespace=STORAGE_TYPE)
@@ -215,15 +226,15 @@ class HookService():
         db_label = db_pod.metadata.labels.get('name')
         log(f"self.pvc_name: {self.pvc_name}","DEBUG" )
         self.kubernetes_service.pod_service.create_pod_by_vault(
-                run_id=self.run_id,
-                image=self.image_name,
-                envs=self.env_vars,
-                gpu=self.run_meta['gpu'],
-                mount_path=mount_path,
-                database=db_label,
-                namespace=self.namespace,
-                pvc_name=self.pvc_name,
-                vault_role= self.vault_role_name  # Match Vault role from _vault_setup
+                run_id = self.run_id,
+                image = self.image_name,
+                envs = self.env_vars,
+                gpu = self.run_meta['gpu'],
+                mount_path = mount_path,
+                database = db_label,
+                namespace = self.namespace,
+                pvc_name = self.pvc_name,
+                vault_role = self.vault_role_name  # Match Vault role from _vault_setup
             )
 
     def _vault_setup(self) -> str:

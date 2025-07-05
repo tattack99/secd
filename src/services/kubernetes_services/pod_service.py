@@ -23,6 +23,134 @@ class PodService():
         except client.ApiException as e:
             log(f"Failed to get pod with label selector '{label_selector}' in namespace '{namespace}': {str(e)}", "ERROR")
             return None
+        
+    def create_nfs_pod(
+            self, 
+            database_name,
+            run_id,
+            image_name,
+            environment_variables,
+        ):
+
+        pod_name = f"secd-{run_id}"
+        
+        # Define the NFS-backed volume and output volume
+        persistence_volumes = [
+            client.V1PersistentVolume(
+                metadata=client.V1ObjectMeta(
+                    name=f"secd-pv-{run_id}-input"
+                ),
+                spec=client.V1PersistentVolumeSpec(
+                    access_modes = ["ReadOnlyMany"],
+                    capacity={"storage" : "25Gi"},
+                    nfs=client.V1NFSVolumeSource(
+                        path=f"/mnt/cloud/apps/sec/storage/{database_name}",
+                        server="nfs.secd",
+                        read_only=True
+                    ),
+                    storage_class_name="nfs",
+                    persistent_volume_reclaim_policy="Retain",
+                    volume_mode="Filesystem",
+                )
+            ),
+        ]
+
+        pod_volumes = [
+            client.V1Volume(
+                name=f"secd-pv-{run_id}-input",
+                persistent_volume_claim=client.V1PersistentVolumeClaimVolumeSource(
+                    claim_name=f"secd-pvc-{run_id}-input",
+                    read_only=True
+                )
+            ),
+            client.V1Volume(
+                name=f"secd-pv-{run_id}-output",
+                persistent_volume_claim=client.V1PersistentVolumeClaimVolumeSource(
+                    claim_name=f"secd-pvc-{run_id}-output",
+                )
+            ),
+        ]
+
+        # PVCs
+        persistence_volume_claims = [
+            client.V1PersistentVolumeClaim(
+                metadata=client.V1ObjectMeta(
+                    name=f"secd-pvc-{run_id}-input",
+                    namespace=pod_name
+                ),
+                spec=client.V1PersistentVolumeClaimSpec(
+                    access_modes=["ReadOnlyMany"],
+                    resources=client.V1ResourceRequirements(
+                        requests={"storage" : "25Gi"}
+                    ),
+                    storage_class_name="nfs",
+                    volume_name=f"secd-pv-{run_id}-input"
+                )
+            ),
+            client.V1PersistentVolumeClaim(
+                metadata=client.V1ObjectMeta(
+                    name=f"secd-pvc-{run_id}-output",
+                    namespace=pod_name
+                ),
+                spec=client.V1PersistentVolumeClaimSpec(
+                    access_modes=["ReadWriteOnce"],
+                    resources=client.V1ResourceRequirements(
+                        requests={"storage" : "25Gi"}
+                    ),
+                    storage_class_name="nfs",
+                    volume_name=f"secd-pv-{run_id}-output"
+                )
+            )
+        ]
+
+        # Extract environment variables
+        k8s_envs = []
+        for key, value in environment_variables.items():
+            env_var = client.V1EnvVar(
+                name=key,
+                value=value
+            )
+            k8s_envs.append(env_var)
+
+        # Define the container with its volume mount and envrionment variables
+        containers = [
+            client.V1Container(
+                name=pod_name,
+                image=image_name,
+                env=k8s_envs,
+                volume_mounts=[
+                    client.V1VolumeMount(
+                        name=f"secd-pv-{run_id}-input",
+                        mount_path="/data",
+                        read_only=True
+                    ),
+                    client.V1VolumeMount(
+                        name=f"secd-pv-{run_id}-output",
+                        mount_path="/output",
+                        read_only=False
+                    )
+                ]
+            )
+        ]
+
+        pod = client.V1Pod(
+            api_version="v1",
+            kind="Pod",
+            metadata=client.V1ObjectMeta(name=pod_name),
+            spec=client.V1PodSpec(
+                volumes=pod_volumes,
+                containers=containers,
+                restart_policy="Never"
+            )
+        )
+
+        # Initialise everything
+        for pv in persistence_volumes:
+            self.v1.create_persistent_volume(pv)
+        for pvc in persistence_volume_claims:
+            self.v1.create_namespaced_persistent_volume_claim(namespace=pod_name, body=pvc)
+        
+        self.v1.create_namespaced_pod(namespace=pod_name, body=pod)
 
     def create_pod_by_vault(
         self,
@@ -43,8 +171,6 @@ class PodService():
             k8s_auth_role_name = f"role-{database_name}-{namespace}"  # e.g., role-mysql-1-secd-<run_id>
             db_role_name = f"role-{database_name}"  # e.g., role-mysql-1
 
-            #log(f"database : {database}", "DEBUG")
-
             # Vault annotations for credential injection
             annotations = {
                 "vault.hashicorp.com/agent-inject": "true",
@@ -61,17 +187,24 @@ class PodService():
             k8s_envs = [client.V1EnvVar(name=key, value=value) for key, value in envs.items()]
             resources = client.V1ResourceRequirements()
             labels = {"name": database_name, "run_id": run_id}
-            #log(f"labels : {labels}", "DEBUG")
             volumes = []
             volume_mounts = []
+
+            # Output folder
+            volumes.append(self._create_volume(f"vol-{run_id}-output", f"secd-pvc-{run_id}-output"))
+            volume_mounts.append(self._create_mount(f"vol-{run_id}-output", "/output"))
+
+            # PVC mount for database 
             if pvc_name:
                 volumes.append(self._create_volume(pvc_name, pvc_name, read_only=True))
                 volume_mounts.append(self._create_mount(pvc_name, "/data", read_only=True))
-            volumes.append(self._create_volume(f"vol-{run_id}-output", f"secd-pvc-{run_id}-output"))
-            volume_mounts.append(self._create_mount(f"vol-{run_id}-output", "/output"))
+            
+            # Cache
             if mount_path:
                 volumes.append(self._create_volume(f"vol-{run_id}-cache", f"secd-pvc-{run_id}-cache"))
                 volume_mounts.append(self._create_mount(f"vol-{run_id}-cache", mount_path))
+            
+            # GPU mount
             if gpu:
                 resources, gpu_labels = self._set_resources(gpu=1)
                 labels.update(gpu_labels)
