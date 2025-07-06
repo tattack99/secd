@@ -22,7 +22,6 @@ from app.src.services.kubernetes_services.secret_service import SecretService
 from app.src.services.kubernetes_services.service_account_service import ServiceAccountService
 
 
-
 class Server:
     def __init__(self):
         log("Starting server....")
@@ -47,9 +46,7 @@ class Server:
             vault_service=self.vault_service
         )
 
-        self.hook_resource = Hook(
-            hook_service=self.hook_service
-        )
+        self.hook_resource = Hook(hook_service=self.hook_service)
 
         self.create_app('/v1/hook', self.hook_resource, 8080)
 

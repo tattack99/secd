@@ -35,6 +35,8 @@ class HookService():
     def create(self, body: Dict[str, Any]):
         try:
             run = self._init(body)
+            if run == None: # Automated push
+                return
 
             if run.database_type == "file": 
                 self._database_is_file(run)
@@ -68,7 +70,9 @@ class HookService():
     def _init(self, body: Dict[str, Any]) -> Run:
         try: 
             # 1) Validate & init run
-            self.gitlab_service.validate_body(body)
+            if not self.gitlab_service.validate_body(body):
+                return None
+            
             run = Run()
 
             gitlab_user_id = body['user_id']

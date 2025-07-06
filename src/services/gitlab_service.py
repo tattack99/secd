@@ -80,18 +80,12 @@ class GitlabService:
 
             try:
                 project = self.client.projects.get(project_id)
-                #log(f"Successfully retrieved project {project_id}")
-
                 commit = project.commits.get(commit_id)
-                #log(f"Successfully retrieved commit {commit_id}")
-
                 gpg_signature = commit.signature()
-                #log(f"Successfully retrieved GPG signature for commit {commit_id}: {gpg_signature}")
 
                 return gpg_signature
 
             except gitlab.exceptions.GitlabGetError as e:
-                # Specific error handling based on which step failed
                 if project is None:
                     log(f"Project {project_id} not found. Details: {e}", "ERROR")
                 elif commit is None:
@@ -128,21 +122,16 @@ class GitlabService:
     def clone(self, gitlab_url: str, repo_path: str):
         gl_settings = self.glSettings
 
-        # add credentials to url
-        gitlab_repo_url = gitlab_url.replace(
-            "https://", f"https://{gl_settings['username']}:{gl_settings['password']}@")
+        gitlab_repo_url = gitlab_url.replace("https://", f"https://{gl_settings['username']}:{gl_settings['password']}@")
         Repo.clone_from(gitlab_repo_url, repo_path)
-
 
     def push_results(self, run_id: str):
         repo_path = f"{get_settings()['path']['repoPath']}/{run_id}"
 
         date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         commit_message = f'secd: Inserting result of run {run_id} finished at {date}'
-
         branch_name = f'secd-{datetime.datetime.now().strftime("%Y-%m-%d_%H.%M.%S")}-{run_id}'
 
-        # check if repo_path exists
         if not os.path.exists(repo_path):
             return
 
@@ -174,7 +163,6 @@ class GitlabService:
 
     def validate_event_token(self, req):
         event = req.get_header('X-Gitlab-Event')
-        #log(f"Received event: {event}")
         if event not in ['Push Hook', 'System Hook']:
             log(f"Invalid X-Gitlab-Event header: {event}", "ERROR")
             raise gitlab.GitlabHeadError(error_message='Invalid X-Gitlab-Event header', response_code=400)
@@ -185,25 +173,25 @@ class GitlabService:
 
     def validate_body_schema(self, body):
         schema = {
-        'event_name': {'type': 'string'},
-        'ref': {'type': 'string'},
-        'user_id': {'type': 'integer'},
-        'project_id': {'type': 'integer'},
-        'project': {
-            'type': 'dict',
-            'schema': {
-                'http_url': {'type': 'string'},
-            }
-        },
-        'commits': {
-            'type': 'list',
-            'schema': {
+            'event_name': {'type': 'string'},
+            'ref': {'type': 'string'},
+            'user_id': {'type': 'integer'},
+            'project_id': {'type': 'integer'},
+            'project': {
                 'type': 'dict',
                 'schema': {
-                    'id': {'type': 'string'},
+                    'http_url': {'type': 'string'},
+                }
+            },
+            'commits': {
+                'type': 'list',
+                'schema': {
+                    'type': 'dict',
+                    'schema': {
+                        'id': {'type': 'string'},
+                    }
                 }
             }
-        }
         }
         v = Validator(schema)
         v.allow_unknown = True
@@ -211,25 +199,29 @@ class GitlabService:
             log(f"Invalid body: {v.errors}", "ERROR")
             raise gitlab.GitlabError(error_message=f'Invalid body: {v.errors}')
 
-    def validate_event_name(self, body):
-        if body['event_name'] != 'push':
-            log(f"Invalid event_name: {body['event_name']}", "ERROR")
-            raise gitlab.GitlabError(error_message=f'Invalid event_name: {body["event_name"]}')
+    def validate_body(self, body) -> bool:
+        try:
 
-    def validate_commit_branch(self, body):
-        if body['ref'] != 'refs/heads/main':
-            log(f"Commit is not from main branch: {body['ref']}", "ERROR")
-            raise gitlab.GitlabError(error_message=f'Commit is not from main branch: {body["ref"]}')
+            # Validate user push and not automated push
+            if body['ref'].startswith('refs/heads/secd-'):
+                log(f"Automated branch {body['ref']} – skipping validation", "INFO")
+                return False
+            
+            self.validate_body_schema(body)
 
-    def validate_commits_signature(self, body):
-        #log(f"Found {len(body['commits'])} commits - {body['project']['path_with_namespace']}")
-
-        for push_commit in body['commits']:
-            #log(f"Validating commit {push_commit['id']}")
-
-            try:
+            # Validate push event
+            if body['event_name'] != 'push':
+                log(f"Invalid event_name: {body['event_name']}", "ERROR")
+                raise gitlab.GitlabError(error_message=f'Invalid event_name: {body["event_name"]}')
+            
+            # Validate commit from main branch
+            if body['ref'] != 'refs/heads/main':
+                log(f"Commit is not from main branch: {body['ref']}", "ERROR")
+                raise gitlab.GitlabError(error_message=f'Commit is not from main branch: {body["ref"]}')
+            
+            # Validate commit signature
+            for push_commit in body['commits']:
                 signature = self.get_signature(body['project_id'], push_commit['id'])
-                #log(f"Signature: {signature}")
 
                 if signature is None:
                     raise gitlab.GitlabError(f'No signature found for commit {push_commit["id"]}')
@@ -237,30 +229,12 @@ class GitlabService:
                 if signature['verification_status'] != 'verified':
                     raise gitlab.GitlabError(f'Signature not verified for commit {push_commit["id"]}')
 
-            except gitlab.GitlabAuthenticationError as e:
-                log(f"Authentication error while accessing commit {push_commit['id']}: {e}", "ERROR")
-                raise
-            except gitlab.GitlabGetError as e:
-                log(f"Failed to retrieve signature for commit {push_commit['id']}: {e}", "ERROR")
-                raise
-            except gitlab.GitlabError as e:
-                log(f"General GitLab error for commit {push_commit['id']}: {e}", "ERROR")
-                raise
+            # Validate docker file present
+            if not self.has_file_in_repo(body['project_id'], 'Dockerfile', body['ref']):
+                log(f"No Dockerfile found in project {body['project_id']}", "ERROR")
+                raise gitlab.GitlabError(error_message=f'No Dockerfile found in project {body["project_id"]}')
+            
+            return True
 
-        #log(f"All {len(body['commits'])} commits have a verified signature")
-
-
-    def validate_dockerfile_presence(self, body):
-        if not self.has_file_in_repo(body['project_id'], 'Dockerfile', body['ref']):
-            log(f"No Dockerfile found in project {body['project_id']}", "ERROR")
-            raise gitlab.GitlabError(error_message=f'No Dockerfile found in project {body["project_id"]}')
-
-    def validate_body(self, body):
-        try:
-            self.validate_body_schema(body)
-            self.validate_event_name(body)
-            self.validate_commit_branch(body) # repeat 
-            self.validate_commits_signature(body)
-            self.validate_dockerfile_presence(body)
         except gitlab.GitlabError as e:
             raise

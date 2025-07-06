@@ -12,14 +12,17 @@ class Hook:
         self.hook_service = hook_service
 
     def on_post(self, req, resp):
-        #log("POST /v1/hook request")
         try:
             self.validate_event_token(req)
             body = self.parse_request_body(req)
             threading.Thread(target=self.hook_service.create(body)).start()
-            self.set_response(resp, falcon.HTTP_200, "success")
+            resp.status = falcon.HTTP_200
+            resp.media = {"status":"success"}
+            
         except Exception as e:
-            self.handle_error(resp, falcon.HTTP_500, "Internal server error", e)
+            log(f"gitlab hook error: {str(e)}", "ERROR")
+            resp.status = falcon.HTTP_500
+            resp.media = {"error" : f"Internal server error: {str(e)}"}
 
     def parse_request_body(self, req):
         try:
@@ -29,7 +32,7 @@ class Hook:
                 raise falcon.HTTPBadRequest(title='Bad request', description='Missing body')
             body = json.loads(body_raw)
             return body
-        except json.JSONDecodeError as e:
+        except Exception as e:
             log(f"Invalid body: {str(e)}", "ERROR")
 
     def validate_event_token(self, req):
@@ -43,14 +46,3 @@ class Hook:
             log("Unauthorized access: Invalid token", "ERROR")
             raise gitlab.GitlabAuthenticationError(error_message='Unauthorized access: Invalid token', response_code=401)
 
-    def set_response(self, resp, status, message):
-        resp.status = status
-        resp.media = {"status": message}
-
-    def handle_error(self, resp, status, error_message, exception=None):
-        if exception:
-            log(f"Error: {str(exception)}", "ERROR")
-        else:
-            log(f"Error: {error_message}", "ERROR")
-        resp.status = status
-        resp.media = {"error": error_message}
