@@ -259,7 +259,7 @@ class GitlabService:
         try:
             self.validate_body_schema(body)
             self.validate_event_name(body)
-            self.validate_commit_branch(body)
+            self.validate_commit_branch(body) # repeat 
             self.validate_commits_signature(body)
             self.validate_dockerfile_presence(body)
         except gitlab.GitlabError as e:
