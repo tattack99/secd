@@ -86,26 +86,21 @@ class KeycloakService:
         return True
 
     def validate(self, auth_header):
-            #log(f"auth_header: {auth_header}")
             try:
                 parts = auth_header.split(' ')
                 if len(parts) != 2 or parts[0].lower() != 'bearer':
                     raise KeycloakAuthenticationError("Invalid authorization header format")
 
                 token = parts[1]
-                #log(f"Validating token: {token}")
 
                 if not token:
                     raise KeycloakAuthenticationError("Authorization token required")
 
                 userinfo = self.keycloak_openid.introspect(token)
-                #log(f"Token introspection response: {json.dumps(userinfo, indent=2)}")
 
                 if userinfo.get('active'):
-                    #log("Token is active")
                     return True
                 else:
-                    #log("Token is inactive")
                     return False
 
             except KeycloakAuthenticationError as e:
@@ -117,9 +112,7 @@ class KeycloakService:
 
     def get_access_token_username_password(self, username, password) -> dict[str, str]:
         try:
-            #log(f"Requesting access token with username: {username}")
             token = self.keycloak_openid.token(username=username, password=password, grant_type="client_credentials")
-            #log(f"Access token response: {token}")
             return token
 
         except Exception as e:

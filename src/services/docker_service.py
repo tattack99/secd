@@ -20,7 +20,6 @@ class DockerService:
                     base_url="unix://var/run/docker.sock",
                     tls=tls_config
                 )
-                #log(f"Docker client initialized with CA certificate from {self.path_registry_ca}", "INFO")
             else:
                 self.client = docker.from_env()
                 log("Docker client initialized without custom TLS configuration", "INFO")
@@ -34,9 +33,7 @@ class DockerService:
 
     def build_image(self, repo_path, image_name):
         try:
-            log(f"repo_path: {repo_path}, image_name: {image_name}")
             self.client.images.build(path=repo_path, tag=image_name)
-            log(f"Image {image_name} built")
         except Exception as e:
             log(f"Unexpected error building image {image_name}: {str(e)}", "ERROR")
             raise Exception(f"Unexpected error building image {image_name}: {e}")
@@ -66,7 +63,6 @@ class DockerService:
             password = self.reg_settings.get("password")
             # Use HTTPS since we're trusting the certificate via TLSConfig
             self.client.login(username=username, password=password, registry=f"https://{url}")
-            log(f"Logged in to registry {url} successfully")
         except Exception as e:
             log(f"Unexpected error logging into registry {url}: {str(e)}", "ERROR")
             raise Exception(f"Unexpected error logging into registry {url}: {e}")
@@ -74,7 +70,6 @@ class DockerService:
     def push_image(self, image_name):
         try:
             self.client.images.push(image_name)
-            log(f"Image {image_name} pushed")
         except Exception as e:
             log(f"Unexpected error pushing image {image_name}: {str(e)}", "ERROR")
             raise Exception(f"Unexpected error pushing image {image_name}: {e}")
@@ -82,7 +77,6 @@ class DockerService:
     def remove_image(self, image_name):
         try:
             self.client.images.remove(image_name)
-            log(f"Image {image_name} removed successfully")
         except Exception as e:
             log(f"Unexpected error removing image {image_name}: {str(e)}", "ERROR")
             raise Exception(f"Unexpected error removing image {image_name}: {e}")

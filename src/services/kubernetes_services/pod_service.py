@@ -216,7 +216,7 @@ class PodService():
             pod_spec = self._create_pod_spec(volumes, [container], service_account=service_account_name)
             pod = self._create_pod_object(pod_name, labels, pod_spec, annotations=annotations)
             self.v1.create_namespaced_pod(namespace=namespace, body=pod)
-            log(f"Pod {pod_name} created in namespace {namespace} with Vault v3 config")
+            log(f"{pod_name} Pod created in namespace {namespace}")
             return pod
         except Exception as e:
             log(f"Error creating pod with Vault v3: {str(e)}", "ERROR")

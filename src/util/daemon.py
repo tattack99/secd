@@ -18,10 +18,9 @@ class Daemon:
             try:
                 cleaned_run_ids = self.kubernetes_service.cleanup_resources()
                 for run_id in cleaned_run_ids:
-                    log(f"Finishing run {run_id} - expired rununtil - Pushing results")
                     self.gitlab_service.push_results(run_id)
-                    log(f"Finishing run {run_id} - Finished and cleaned up")
+                    log(f"Finishing run {run_id} - expired rununtil - Pushing results")
             except Exception as e:
                 log(f"Error in Daemon run loop: {e}", "ERROR")
 
-            time.sleep(5)
+            time.sleep(10)

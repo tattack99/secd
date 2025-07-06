@@ -14,7 +14,7 @@ class NamespaceService():
             metadata=client.V1ObjectMeta(name=name, labels=labels, annotations=annotations)
         )
         self.v1.create_namespace(body=namespace)
-        log(f"Namespace {name} created")
+        log(f"{name} namespace created")
         return namespace
     
     def get_namespace(self, name: str) -> Optional[client.V1Namespace]:

@@ -45,7 +45,6 @@ class KubernetesService:
     def create_namespace(self, user_id: str, run_id: str, run_for: int, labels: str) -> None:
         run_until = datetime.datetime.now() + datetime.timedelta(hours=run_for)
         namespace_name = f"secd-{run_id}"
-        #labels = {"access": "database-access"}
         annotations = {"userid": user_id, "rununtil": run_until.isoformat()}
         self.namespace_service.create_namespace(namespace_name, labels, annotations)
 

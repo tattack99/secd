@@ -204,7 +204,7 @@ class GitlabService:
 
             # Validate user push and not automated push
             if body['ref'].startswith('refs/heads/secd-'):
-                log(f"Automated branch {body['ref']} – skipping validation", "INFO")
+                log(f"Automated branch push {body['ref']}", "INFO")
                 return False
             
             self.validate_body_schema(body)

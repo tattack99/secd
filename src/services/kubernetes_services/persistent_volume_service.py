@@ -33,7 +33,7 @@ class PersistentVolumeService():
         )
         try:
             self.v1.create_persistent_volume(body=pv)
-            log(f"PV {name} created")
+            log(f"{name} PV created")
             return pv
         except client.ApiException as e:
             log(f"Failed to create PV {name}: {e}", "ERROR")
@@ -97,7 +97,7 @@ class PersistentVolumeService():
         )
         try:
             self.v1.create_namespaced_persistent_volume_claim(namespace=namespace, body=pvc)
-            log(f"PVC {pvc_name} created in namespace {namespace}")
+            log(f"{pvc_name} PVC created in namespace {namespace}")
             return pvc
         except client.ApiException as e:
             log(f"Failed to create PVC {pvc_name}: {e}", "ERROR")
@@ -117,10 +117,8 @@ class PersistentVolumeService():
         except client.ApiException as e:
             log(f"Failed to delete PVC {name} in namespace {namespace}: {e}", "ERROR")
 
-    # Service Methods
     def cleanup_persistent_volumes(self, namespaces: List[client.V1Namespace]) -> None:
         try:
-            #log(f"Cleaning up PVs in {len(namespaces)} namespaces")
             for namespace in namespaces:
                 namespace_name = namespace.metadata.name
                 if self._should_cleanup_namespace(namespace):

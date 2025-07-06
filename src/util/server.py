@@ -20,6 +20,7 @@ from app.src.services.kubernetes_services.persistent_volume_service import Persi
 from app.src.services.kubernetes_services.pod_service import PodService
 from app.src.services.kubernetes_services.secret_service import SecretService
 from app.src.services.kubernetes_services.service_account_service import ServiceAccountService
+from app.src.util.quiet_handler import QuietHandler
 
 
 class Server:
@@ -57,7 +58,7 @@ class Server:
 
     def serve_app(self, app, port):
         try:
-            with make_server('', port, app) as httpd:
+            with make_server('', port, app, handler_class=QuietHandler) as httpd:
                 httpd.serve_forever()
         except Exception as e:
             log(f"Error starting server: {e}", "ERROR")
